@@ -24,6 +24,9 @@ let useWasm = !(
     process.env.BBS_SIGNATURES_MODE === BBS_SIGNATURES_MODES.nodejs)
 );
 
+// force to use Wasm
+useWasm = true;
+
 try {
   if (!useWasm) {
     module.exports = require("@mattrglobal/node-bbs-signatures");
