@@ -22,6 +22,7 @@ import {
   BlsBbsVerifyRequest,
   BbsCreateProofRequest,
   BbsVerifyProofRequest,
+  BbsCreateProofMultiRequest,
 } from "./types";
 
 export * from "./types";
@@ -71,3 +72,7 @@ export function blsCreateProof(
 export function blsVerifyProof(
   request: BbsVerifyProofRequest
 ): Promise<BbsVerifyResult>;
+
+export function blsCreateProofMulti(
+  request: BbsCreateProofMultiRequest
+): Promise<Uint8Array>;

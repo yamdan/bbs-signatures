@@ -127,3 +127,11 @@ module.exports.blsVerifyProof = async (request) => {
   await initialize();
   return await throwErrorOnRejectedPromise(wasm.blsVerifyProof(request));
 };
+
+module.exports.blsCreateProofMulti = async (request) => {
+  await initialize();
+  return await throwErrorOnRejectedPromise(
+    wasm.blsCreateProofMulti(request),
+    "Failed to create proof"
+  );
+};
