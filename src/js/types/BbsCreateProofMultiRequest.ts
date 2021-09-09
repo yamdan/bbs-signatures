@@ -18,21 +18,28 @@ export interface BbsCreateProofMultiRequest {
   /**
    * BBS signature to generate the BBS proof from
    */
-  readonly signature: Uint8Array;
+  readonly signature: Uint8Array[];
   /**
    * Public key of the original signer of the signature
    */
-  readonly publicKey: Uint8Array;
+  readonly publicKey: Uint8Array[];
   /**
    * The messages that were originally signed
    */
-  readonly messages: readonly Uint8Array[];
+  readonly messages: readonly Uint8Array[][];
   /**
    * The zero based indicies of which messages to reveal
    */
-  readonly revealed: readonly number[];
+  readonly revealed: readonly number[][];
   /**
    * A nonce for the resulting proof
    */
   readonly nonce: Uint8Array;
+  /**
+   * The equivalent classes to indicate which attributes are to be proved their equalities
+   * e.g., [[[0,3], [0,5], [1,4]], [[0,4], [1,5]]] means:
+   *   - attribute 3 and 5 in credential 0 and attribute 4 in credential 1 are proved to be the same
+   *   - attribute 4 in credential 0 and attribute 5 in credential 1 are proved to be the same
+   */
+  readonly equivs: readonly [number, number][][];
 }

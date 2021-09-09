@@ -23,12 +23,15 @@ use pairing_plus::{
 };
 use rand::{thread_rng, RngCore};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::{
     collections::{BTreeMap, BTreeSet},
     convert::TryInto,
     iter::FromIterator,
 };
 use wasm_bindgen::prelude::*;
+
+use itertools::multizip;
 
 wasm_impl!(
     /// Convenience struct for interfacing with JS.
@@ -86,11 +89,12 @@ wasm_impl!(
 
 wasm_impl!(
     BlsCreateProofMultiRequest,
-    signature: Signature,
-    publicKey: DeterministicPublicKey,
-    messages: Vec<Vec<u8>>,
-    revealed: Vec<usize>,
-    nonce: Vec<u8>
+    signature: Vec<Signature>,
+    publicKey: Vec<DeterministicPublicKey>,
+    messages: Vec<Vec<Vec<u8>>>,
+    revealed: Vec<Vec<usize>>,
+    nonce: Vec<u8>,
+    equivs: Vec<Vec<(usize, usize)>>
 );
 
 /// Generate a BLS 12-381 key pair.
@@ -369,42 +373,106 @@ fn gen_sk(msg: &[u8]) -> Fr {
 pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
     let request: BlsCreateProofMultiRequest = request.try_into()?;
-    if request.revealed.iter().any(|r| *r > request.messages.len()) {
-        return Err(JsValue::from("revealed value is out of bounds"));
+    let num_of_inputs = request.messages.len();
+
+    if [
+        request.signature.len(),
+        request.revealed.len(),
+        request.publicKey.len(),
+    ]
+    .iter()
+    .any(|&x| x != num_of_inputs)
+    {
+        return Err(JsValue::from(
+            "numbers of messages, signature, revealed, and publicKey must be the same",
+        ));
     }
-    let pk = request.publicKey.to_public_key(request.messages.len())?;
-    let revealed: BTreeSet<usize> = BTreeSet::from_iter(request.revealed.into_iter());
-    let mut messages = Vec::new();
-    for i in 0..request.messages.len() {
-        if revealed.contains(&i) {
-            messages.push(ProofMessage::Revealed(SignatureMessage::hash(
-                &request.messages[i],
-            )));
-        } else {
-            messages.push(ProofMessage::Hidden(HiddenMessage::ProofSpecificBlinding(
-                SignatureMessage::hash(&request.messages[i]),
-            )));
+
+    let mut poks: Vec<PoKOfSignature> = Vec::with_capacity(num_of_inputs);
+    let mut message_counts: Vec<usize> = Vec::with_capacity(num_of_inputs);
+    let mut revealeds: Vec<BTreeSet<usize>> = Vec::with_capacity(num_of_inputs);
+
+    // generate blindings and hashmaps based on request.equivs
+    let equiv_blindings: Vec<ProofNonce> = request
+        .equivs
+        .iter()
+        .map(|_| ProofNonce::random())
+        .collect();
+    let mut equivs_map: HashMap<(usize, usize), usize> = HashMap::new();
+    for (i, eq) in request.equivs.iter().enumerate() {
+        for &e in eq {
+            equivs_map.insert(e, i);
         }
     }
-    match PoKOfSignature::init(&request.signature, &pk, messages.as_slice()) {
-        Err(e) => return Err(JsValue::from(&format!("{:?}", e))),
-        Ok(pok) => {
-            let mut challenge_bytes = pok.to_bytes();
-            if request.nonce.is_empty() {
-                challenge_bytes.extend_from_slice(&[0u8; FR_COMPRESSED_SIZE]);
-            } else {
-                let nonce = ProofNonce::hash(&request.nonce);
-                challenge_bytes.extend_from_slice(nonce.to_bytes_uncompressed_form().as_ref());
-            }
-            let challenge_hash = ProofChallenge::hash(&challenge_bytes);
-            match pok.gen_proof(&challenge_hash) {
-                Ok(proof) => {
-                    let out =
-                        PoKOfSignatureProofWrapper::new(request.messages.len(), &revealed, proof);
-                    Ok(serde_wasm_bindgen::to_value(&out).unwrap())
+
+    // (1) commit
+    for (i, (r_messages, r_signature, r_revealed, r_pk)) in multizip((
+        request.messages,
+        request.signature,
+        request.revealed,
+        request.publicKey,
+    ))
+    .enumerate()
+    {
+        if r_revealed.iter().any(|r| *r > r_messages.len()) {
+            return Err(JsValue::from("revealed value is out of bounds"));
+        }
+        let pk = r_pk.to_public_key(r_messages.len())?;
+        let revealed: BTreeSet<usize> = BTreeSet::from_iter(r_revealed.into_iter());
+        let mut messages = Vec::new();
+        for (j, r_message) in r_messages.iter().enumerate() {
+            if revealed.contains(&j) {
+                match equivs_map.get(&(i, j)) {
+                    None => {
+                        messages.push(ProofMessage::Revealed(SignatureMessage::hash(&r_message)))
+                    }
+                    Some(&k) => {
+                        messages.push(ProofMessage::Hidden(HiddenMessage::ExternalBlinding(
+                            SignatureMessage::hash(&r_message),
+                            equiv_blindings[k],
+                        )))
+                    }
                 }
-                Err(e) => Err(JsValue::from(&format!("{:?}", e))),
+            } else {
+                messages.push(ProofMessage::Hidden(HiddenMessage::ProofSpecificBlinding(
+                    SignatureMessage::hash(&r_message),
+                )));
+            }
+        }
+        match PoKOfSignature::init(&r_signature, &pk, messages.as_slice()) {
+            Err(e) => return Err(JsValue::from(&format!("{:?}", e))),
+            Ok(pok) => {
+                poks.push(pok);
+                message_counts.push(r_messages.len());
+                revealeds.push(revealed);
             }
         }
     }
+
+    // (2) challenge
+    let mut challenge_bytes = Vec::new();
+    for pok in &poks {
+        challenge_bytes.extend_from_slice(pok.to_bytes().as_slice());
+    }
+    if request.nonce.is_empty() {
+        challenge_bytes.extend_from_slice(&[0u8; FR_COMPRESSED_SIZE]);
+    } else {
+        let nonce = ProofNonce::hash(&request.nonce);
+        challenge_bytes.extend_from_slice(nonce.to_bytes_uncompressed_form().as_ref());
+    }
+    let challenge_hash = ProofChallenge::hash(&challenge_bytes);
+
+    // (3) response
+    let mut proofs: Vec<PoKOfSignatureProofWrapper> = Vec::with_capacity(num_of_inputs);
+    for (pok, message_count, revealed) in multizip((poks, message_counts, revealeds)) {
+        match pok.gen_proof(&challenge_hash) {
+            Ok(proof) => {
+                let out = PoKOfSignatureProofWrapper::new(message_count, &revealed, proof);
+                proofs.push(out);
+            }
+            Err(e) => return Err(JsValue::from(&format!("{:?}", e))),
+        }
+    }
+
+    Ok(serde_wasm_bindgen::to_value(&proofs).unwrap())
 }
