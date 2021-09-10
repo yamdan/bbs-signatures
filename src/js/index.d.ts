@@ -75,4 +75,4 @@ export function blsVerifyProof(
 
 export function blsCreateProofMulti(
   request: BbsCreateProofMultiRequest
-): Promise<Uint8Array>;
+): Promise<Uint8Array[]>;
