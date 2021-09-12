@@ -135,3 +135,8 @@ module.exports.blsCreateProofMulti = async (request) => {
     "Failed to create proof"
   );
 };
+
+module.exports.blsVerifyProofMulti = async (request) => {
+  await initialize();
+  return await throwErrorOnRejectedPromise(wasm.blsVerifyProofMulti(request));
+};

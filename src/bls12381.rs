@@ -97,6 +97,14 @@ wasm_impl!(
     equivs: Vec<Vec<(usize, usize)>>
 );
 
+wasm_impl!(
+    BlsVerifyProofMultiContext,
+    proof: Vec<PoKOfSignatureProofWrapper>,
+    publicKey: Vec<DeterministicPublicKey>,
+    messages: Vec<Vec<Vec<u8>>>,
+    nonce: Vec<u8>
+);
+
 /// Generate a BLS 12-381 key pair.
 ///
 /// * seed: UIntArray with 32 element
@@ -368,7 +376,7 @@ fn gen_sk(msg: &[u8]) -> Fr {
     Fr::from_okm(&result)
 }
 
-/// Creates a BBS+ PoK
+/// Creates a BBS+ PoK from termwise-encoded multiple credentials
 #[wasm_bindgen(js_name = blsCreateProofMulti)]
 pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
@@ -477,4 +485,59 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     }
 
     Ok(serde_wasm_bindgen::to_value(&proofs).unwrap())
+}
+
+/// Verify a BBS+ PoK from termwise-encoded multiple credentials
+#[wasm_bindgen(js_name = blsVerifyProofMulti)]
+pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue> {
+    set_panic_hook();
+    let res = serde_wasm_bindgen::from_value::<BlsVerifyProofContext>(request);
+    let request: BlsVerifyProofContext;
+    match res {
+        Ok(r) => request = r,
+        Err(e) => {
+            return Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
+                verified: false,
+                error: Some(format!("{:?}", e)),
+            })
+            .unwrap())
+        }
+    };
+
+    let nonce = if request.nonce.is_empty() {
+        ProofNonce::default()
+    } else {
+        ProofNonce::hash(&request.nonce)
+    };
+    let message_count = u16::from_be_bytes(*array_ref![request.proof.bit_vector, 0, 2]) as usize;
+    let pk = request.publicKey.to_public_key(message_count)?;
+    let messages = request.messages.clone();
+    let (revealed, proof) = request.proof.unwrap();
+    let proof_request = ProofRequest {
+        revealed_messages: revealed,
+        verification_key: pk,
+    };
+
+    let revealed_vec = proof_request
+        .revealed_messages
+        .iter()
+        .collect::<Vec<&usize>>();
+    let mut revealed_messages = BTreeMap::new();
+    for i in 0..revealed_vec.len() {
+        revealed_messages.insert(
+            *revealed_vec[i],
+            SignatureMessage::hash(messages[i].clone()),
+        );
+    }
+
+    let signature_proof = SignatureProof {
+        revealed_messages,
+        proof,
+    };
+
+    Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
+        verified: Verifier::verify_signature_pok(&proof_request, &signature_proof, &nonce).is_ok(),
+        error: None,
+    })
+    .unwrap())
 }
