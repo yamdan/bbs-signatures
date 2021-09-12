@@ -13,7 +13,7 @@
 
 use crate::utils::set_panic_hook;
 
-use crate::{BbsVerifyResponse, PoKOfSignatureProofWrapper, PoKOfSignatureProofMultiWrapper};
+use crate::{BbsVerifyResponse, PoKOfSignatureProofMultiWrapper, PoKOfSignatureProofWrapper};
 use bbs::prelude::*;
 use pairing_plus::{
     bls12_381::{Bls12, Fr, G1, G2},
@@ -475,9 +475,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     for (pok, revealed) in multizip((poks, revealeds)) {
         match pok.gen_proof(&challenge_hash) {
             Ok(proof) => {
-                let out = PoKOfSignatureProofMultiWrapper{
-                    revealed, proof
-                };
+                let out = PoKOfSignatureProofMultiWrapper { revealed, proof };
                 proofs.push(out);
             }
             Err(e) => return Err(JsValue::from(&format!("{:?}", e))),
@@ -491,8 +489,8 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 #[wasm_bindgen(js_name = blsVerifyProofMulti)]
 pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
-    let res = serde_wasm_bindgen::from_value::<BlsVerifyProofContext>(request);
-    let request: BlsVerifyProofContext;
+    let res = serde_wasm_bindgen::from_value::<BlsVerifyProofMultiContext>(request);
+    let request: BlsVerifyProofMultiContext;
     match res {
         Ok(r) => request = r,
         Err(e) => {
@@ -504,39 +502,63 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         }
     };
 
+    let num_of_inputs = request.messages.len();
+    if [request.proof.len(), request.publicKey.len()]
+        .iter()
+        .any(|&x| x != num_of_inputs)
+    {
+        return Err(JsValue::from(
+            "numbers of messages, proof, and publicKey must be the same",
+        ));
+    }
+
     let nonce = if request.nonce.is_empty() {
         ProofNonce::default()
     } else {
         ProofNonce::hash(&request.nonce)
     };
-    let message_count = u16::from_be_bytes(*array_ref![request.proof.bit_vector, 0, 2]) as usize;
-    let pk = request.publicKey.to_public_key(message_count)?;
-    let messages = request.messages.clone();
-    let (revealed, proof) = request.proof.unwrap();
-    let proof_request = ProofRequest {
-        revealed_messages: revealed,
-        verification_key: pk,
-    };
 
-    let revealed_vec = proof_request
-        .revealed_messages
-        .iter()
-        .collect::<Vec<&usize>>();
-    let mut revealed_messages = BTreeMap::new();
-    for i in 0..revealed_vec.len() {
-        revealed_messages.insert(
-            *revealed_vec[i],
-            SignatureMessage::hash(messages[i].clone()),
-        );
+    // (1) generate challenge hash
+
+    // (2) verify
+    for (i, (r_messages, r_proof, r_pk)) in
+        multizip((request.messages, request.proof, request.publicKey)).enumerate()
+    {
+        let pk = r_pk.to_public_key(message_count)?;
+        let messages = request.messages.clone();
+        let (revealed, proof) = request.proof.unwrap();
+        let proof_request = ProofRequest {
+            revealed_messages: revealed,
+            verification_key: pk,
+        };
+
+        let revealed_vec = proof_request
+            .revealed_messages
+            .iter()
+            .collect::<Vec<&usize>>();
+        let mut revealed_messages = BTreeMap::new();
+        for i in 0..revealed_vec.len() {
+            revealed_messages.insert(
+                *revealed_vec[i],
+                SignatureMessage::hash(messages[i].clone()),
+            );
+        }
+
+        let signature_proof = SignatureProof {
+            revealed_messages,
+            proof,
+        };
+
+        Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
+            verified: Verifier::verify_signature_pok(&proof_request, &signature_proof, &nonce)
+                .is_ok(),
+            error: None,
+        })
+        .unwrap());
     }
 
-    let signature_proof = SignatureProof {
-        revealed_messages,
-        proof,
-    };
-
     Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
-        verified: Verifier::verify_signature_pok(&proof_request, &signature_proof, &nonce).is_ok(),
+        verified: false,
         error: None,
     })
     .unwrap())
