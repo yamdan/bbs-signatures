@@ -42,6 +42,12 @@ pub struct PoKOfSignatureProofWrapper {
     pub proof: PoKOfSignatureProof,
 }
 
+#[derive(Debug)]
+pub struct PoKOfSignatureProofMultiWrapper {
+    pub revealed: Vec<usize>,
+    pub proof: PoKOfSignatureProof,
+}
+
 impl PoKOfSignatureProofWrapper {
     pub fn new(
         message_count: usize,
@@ -59,6 +65,25 @@ impl PoKOfSignatureProofWrapper {
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut data = self.bit_vector.to_vec();
+        data.append(&mut self.proof.to_bytes_compressed_form());
+        data
+    }
+}
+
+impl PoKOfSignatureProofMultiWrapper {
+    pub fn new(        
+        revealed: Vec<usize>,
+        proof: PoKOfSignatureProof,
+    ) -> Self {
+        Self { revealed, proof }
+    }
+
+    pub fn unwrap(self) -> (Vec<usize>, PoKOfSignatureProof) {
+        (self.revealed, self.proof)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut data = serde_cbor::to_vec(&self.revealed).unwrap();
         data.append(&mut self.proof.to_bytes_compressed_form());
         data
     }
@@ -83,6 +108,15 @@ impl TryFrom<&[u8]> for PoKOfSignatureProofWrapper {
 }
 
 impl Serialize for PoKOfSignatureProofWrapper {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(&self.to_bytes().as_slice())
+    }
+}
+
+impl Serialize for PoKOfSignatureProofMultiWrapper {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

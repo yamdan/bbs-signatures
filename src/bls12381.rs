@@ -13,7 +13,7 @@
 
 use crate::utils::set_panic_hook;
 
-use crate::{BbsVerifyResponse, PoKOfSignatureProofWrapper};
+use crate::{BbsVerifyResponse, PoKOfSignatureProofWrapper, PoKOfSignatureProofMultiWrapper};
 use bbs::prelude::*;
 use pairing_plus::{
     bls12_381::{Bls12, Fr, G1, G2},
@@ -390,7 +390,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     let mut poks: Vec<PoKOfSignature> = Vec::with_capacity(num_of_inputs);
     let mut message_counts: Vec<usize> = Vec::with_capacity(num_of_inputs);
-    let mut revealeds: Vec<BTreeSet<usize>> = Vec::with_capacity(num_of_inputs);
+    let mut revealeds: Vec<Vec<usize>> = Vec::with_capacity(num_of_inputs);
 
     // generate blindings and hashmaps based on request.equivs
     let equiv_blindings: Vec<ProofNonce> = request
@@ -418,7 +418,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             return Err(JsValue::from("revealed value is out of bounds"));
         }
         let pk = r_pk.to_public_key(r_messages.len())?;
-        let revealed: BTreeSet<usize> = BTreeSet::from_iter(r_revealed.into_iter());
+        let revealed: BTreeSet<&usize> = r_revealed.iter().collect();
         let mut messages = Vec::new();
         for (j, r_message) in r_messages.iter().enumerate() {
             if revealed.contains(&j) {
@@ -444,7 +444,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             Ok(pok) => {
                 poks.push(pok);
                 message_counts.push(r_messages.len());
-                revealeds.push(revealed);
+                revealeds.push(r_revealed);
             }
         }
     }
@@ -463,11 +463,13 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     let challenge_hash = ProofChallenge::hash(&challenge_bytes);
 
     // (3) response
-    let mut proofs: Vec<PoKOfSignatureProofWrapper> = Vec::with_capacity(num_of_inputs);
-    for (pok, message_count, revealed) in multizip((poks, message_counts, revealeds)) {
+    let mut proofs: Vec<PoKOfSignatureProofMultiWrapper> = Vec::with_capacity(num_of_inputs);
+    for (pok, revealed) in multizip((poks, revealeds)) {
         match pok.gen_proof(&challenge_hash) {
             Ok(proof) => {
-                let out = PoKOfSignatureProofWrapper::new(message_count, &revealed, proof);
+                let out = PoKOfSignatureProofMultiWrapper{
+                    revealed, proof
+                };
                 proofs.push(out);
             }
             Err(e) => return Err(JsValue::from(&format!("{:?}", e))),
