@@ -30,3 +30,4 @@ export { BlsBbsSignRequest } from "./BlsBbsSignRequest";
 export { BlsBbsVerifyRequest } from "./BlsBbsVerifyRequest";
 export { BbsVerifyResult } from "./BbsVerifyResult";
 export { BbsCreateProofMultiRequest } from "./BbsCreateProofMultiRequest";
+export { BbsVerifyProofMultiRequest } from "./BbsVerifyProofMultiRequest";

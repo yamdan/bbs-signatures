@@ -99,7 +99,7 @@ wasm_impl!(
 
 wasm_impl!(
     BlsVerifyProofMultiContext,
-    proof: Vec<PoKOfSignatureProofWrapper>,
+    proof: Vec<PoKOfSignatureProofMultiWrapper>,
     publicKey: Vec<DeterministicPublicKey>,
     messages: Vec<Vec<Vec<u8>>>,
     nonce: Vec<u8>
@@ -427,7 +427,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         }
         let pk = r_pk.to_public_key(r_messages.len())?;
         let revealed: BTreeSet<&usize> = r_revealed.iter().collect();
-        let mut messages = Vec::new();
+        let mut messages = Vec::with_capacity(r_messages.len());
         for (j, r_message) in r_messages.iter().enumerate() {
             if revealed.contains(&j) {
                 match equivs_map.get(&(i, j)) {
@@ -472,10 +472,10 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     // (3) response
     let mut proofs: Vec<PoKOfSignatureProofMultiWrapper> = Vec::with_capacity(num_of_inputs);
-    for (pok, revealed) in multizip((poks, revealeds)) {
+    for (pok, message_count, revealed) in multizip((poks, message_counts, revealeds)) {
         match pok.gen_proof(&challenge_hash) {
             Ok(proof) => {
-                let out = PoKOfSignatureProofMultiWrapper { revealed, proof };
+                let out = PoKOfSignatureProofMultiWrapper::new(message_count, revealed, proof);
                 proofs.push(out);
             }
             Err(e) => return Err(JsValue::from(&format!("{:?}", e))),
@@ -519,28 +519,25 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     };
 
     // (1) generate challenge hash
+    // TODO:
 
     // (2) verify
     for (i, (r_messages, r_proof, r_pk)) in
         multizip((request.messages, request.proof, request.publicKey)).enumerate()
     {
-        let pk = r_pk.to_public_key(message_count)?;
-        let messages = request.messages.clone();
-        let (revealed, proof) = request.proof.unwrap();
+        let (message_count, revealed_vec, proof) = r_proof.unwrap();
+        let pk = r_pk.to_public_key(message_count)?;        
+        let revealed: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
         let proof_request = ProofRequest {
             revealed_messages: revealed,
             verification_key: pk,
         };
 
-        let revealed_vec = proof_request
-            .revealed_messages
-            .iter()
-            .collect::<Vec<&usize>>();
         let mut revealed_messages = BTreeMap::new();
         for i in 0..revealed_vec.len() {
             revealed_messages.insert(
-                *revealed_vec[i],
-                SignatureMessage::hash(messages[i].clone()),
+                revealed_vec[i],
+                SignatureMessage::hash(r_messages[i].clone()),
             );
         }
 
@@ -549,14 +546,16 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             proof,
         };
 
-        Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
-            verified: Verifier::verify_signature_pok(&proof_request, &signature_proof, &nonce)
-                .is_ok(),
-            error: None,
-        })
-        .unwrap());
+        // TODO:
+        // Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
+        //     verified: Verifier::verify_signature_pok(&proof_request, &signature_proof, &nonce)
+        //         .is_ok(),
+        //     error: None,
+        // })
+        // .unwrap());
     }
 
+    // TODO: complete this verification
     Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
         verified: false,
         error: None,
