@@ -76,7 +76,7 @@ export function blsVerifyProof(
 
 export function blsCreateProofMulti(
   request: BbsCreateProofMultiRequest
-): Promise<Uint8Array[]>;
+): Promise<{ value: Uint8Array }[]>;
 
 export function blsVerifyProofMulti(
   request: BbsVerifyProofMultiRequest

@@ -31,4 +31,11 @@ export interface BbsVerifyProofMultiRequest {
    * Nonce included in the proof for the un-revealed attributes (OPTIONAL)
    */
   readonly nonce: Uint8Array;
+  /**
+   * The equivalent classes to indicate which attributes are to be proved their equalities
+   * e.g., [[[0,3], [0,5], [1,4]], [[0,4], [1,5]]] means:
+   *   - attribute 3 and 5 in credential 0 and attribute 4 in credential 1 are proved to be the same
+   *   - attribute 4 in credential 0 and attribute 5 in credential 1 are proved to be the same
+   */
+  readonly equivs: readonly [number, number][][];
 }

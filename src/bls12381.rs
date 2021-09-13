@@ -102,7 +102,8 @@ wasm_impl!(
     proof: Vec<PoKOfSignatureProofMultiWrapper>,
     publicKey: Vec<DeterministicPublicKey>,
     messages: Vec<Vec<Vec<u8>>>,
-    nonce: Vec<u8>
+    nonce: Vec<u8>,
+    equivs: Vec<Vec<(usize, usize)>>
 );
 
 /// Generate a BLS 12-381 key pair.
@@ -458,6 +459,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     }
 
     // (2) challenge
+    //     ch = H(bases_1, cmts_1, ..., bases_n, cmts_n, nonce)
     let mut challenge_bytes = Vec::new();
     for pok in &poks {
         challenge_bytes.extend_from_slice(pok.to_bytes().as_slice());
@@ -518,10 +520,15 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         ProofNonce::hash(&request.nonce)
     };
 
-    // (1) generate challenge hash
-    // TODO:
+    let mut equivs_map: HashMap<(usize, usize), usize> = HashMap::new();
+    for (i, eq) in request.equivs.iter().enumerate() {
+        for &e in eq {
+            equivs_map.insert(e, i);
+        }
+    }
 
-    // (2) verify
+    // (1) generate challenge hash
+    //     ch = H(bases_1, cmts_1, ..., bases_n, cmts_n, nonce)
     for (i, (r_messages, r_proof, r_pk)) in
         multizip((request.messages, request.proof, request.publicKey)).enumerate()
     {
@@ -546,6 +553,15 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             proof,
         };
 
+        let mut challenge_bytes = signature_proof.proof.get_bytes_for_challenge(
+            proof_request.revealed_messages.clone(),
+            &proof_request.verification_key,
+        );
+        challenge_bytes.extend_from_slice(&nonce.to_bytes_uncompressed_form()[..]);
+    
+        let challenge_verifier = ProofChallenge::hash(&challenge_bytes);
+    
+
         // TODO:
         // Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
         //     verified: Verifier::verify_signature_pok(&proof_request, &signature_proof, &nonce)
@@ -555,6 +571,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         // .unwrap());
     }
 
+    // (2) verify
     // TODO: complete this verification
     Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
         verified: false,
