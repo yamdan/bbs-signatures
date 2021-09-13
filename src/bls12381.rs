@@ -529,53 +529,75 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     // (1) generate challenge hash
     //     ch = H(bases_1, cmts_1, ..., bases_n, cmts_n, nonce)
+    let mut proof_requests: Vec<ProofRequest> = Vec::with_capacity(num_of_inputs);
+    let mut proofs: Vec<SignatureProof> = Vec::with_capacity(num_of_inputs);
     for (i, (r_messages, r_proof, r_pk)) in
         multizip((request.messages, request.proof, request.publicKey)).enumerate()
     {
         let (message_count, revealed_vec, proof) = r_proof.unwrap();
-        let pk = r_pk.to_public_key(message_count)?;        
-        let revealed: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
+        let pk = r_pk.to_public_key(message_count)?;
+        let revealed_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
         let proof_request = ProofRequest {
-            revealed_messages: revealed,
+            revealed_messages: revealed_set,
             verification_key: pk,
         };
+        proof_requests.push(proof_request);
 
         let mut revealed_messages = BTreeMap::new();
-        for i in 0..revealed_vec.len() {
-            revealed_messages.insert(
-                revealed_vec[i],
-                SignatureMessage::hash(r_messages[i].clone()),
-            );
+        for j in 0..revealed_vec.len() {
+            match equivs_map.get(&(i, j)) {
+                None => {
+                    revealed_messages.insert(
+                        revealed_vec[j],
+                        SignatureMessage::hash(r_messages[j].clone()),
+                    );
+                }
+                Some(&k) => {
+                    // TODO: do something
+                }
+            }
         }
 
         let signature_proof = SignatureProof {
             revealed_messages,
             proof,
         };
-
-        let mut challenge_bytes = signature_proof.proof.get_bytes_for_challenge(
-            proof_request.revealed_messages.clone(),
-            &proof_request.verification_key,
-        );
-        challenge_bytes.extend_from_slice(&nonce.to_bytes_uncompressed_form()[..]);
-    
-        let challenge_verifier = ProofChallenge::hash(&challenge_bytes);
-    
-
-        // TODO:
-        // Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
-        //     verified: Verifier::verify_signature_pok(&proof_request, &signature_proof, &nonce)
-        //         .is_ok(),
-        //     error: None,
-        // })
-        // .unwrap());
+        proofs.push(signature_proof);
     }
 
+    let challenge =
+        Verifier::create_challenge_hash(&proofs, &proof_requests, &nonce, None).unwrap();
+
     // (2) verify
-    // TODO: complete this verification
-    Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
-        verified: false,
-        error: None,
-    })
-    .unwrap())
+    let results: Vec<Result<Vec<SignatureMessage>, BBSError>> = proofs
+        .iter()
+        .zip(proof_requests.iter())
+        .map(|(signature_proof, proof_request)| {
+            match signature_proof.proof.verify(
+                &proof_request.verification_key,
+                &signature_proof.revealed_messages,
+                &challenge,
+            )? {
+                PoKOfSignatureProofStatus::Success => Ok(signature_proof
+                    .revealed_messages
+                    .iter()
+                    .map(|(_, m)| *m)
+                    .collect::<Vec<SignatureMessage>>()),
+                e => Err(BBSErrorKind::InvalidProof { status: e }.into()),
+            }
+        })
+        .collect();
+
+    match results.iter().all(|r| r.is_ok()) {
+        true => Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
+            verified: true,
+            error: None,
+        })
+        .unwrap()),
+        false => Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
+            verified: false,
+            error: Some(format!("{:?}", results)),
+        })
+        .unwrap()),
+    }
 }

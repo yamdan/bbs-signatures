@@ -70,12 +70,10 @@ impl PoKOfSignatureProofWrapper {
 }
 
 impl PoKOfSignatureProofMultiWrapper {
-    pub fn new(
-        message_count: usize,
-        revealed: Vec<usize>,
-        proof: PoKOfSignatureProof,
-    ) -> Self {
-        Self { value: serde_cbor::to_vec(&(message_count, revealed, proof)).unwrap() }
+    pub fn new(message_count: usize, revealed: Vec<usize>, proof: PoKOfSignatureProof) -> Self {
+        Self {
+            value: serde_cbor::to_vec(&(message_count, revealed, proof)).unwrap(),
+        }
     }
 
     pub fn unwrap(self) -> (usize, Vec<usize>, PoKOfSignatureProof) {

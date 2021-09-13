@@ -18,7 +18,7 @@ export interface BbsVerifyProofMultiRequest {
   /**
    * The BBS proof to verify
    */
-  readonly proof: Uint8Array[];
+  readonly proof: { value: Uint8Array }[];
   /**
    * Public key of the signer of the proof to verify
    */
