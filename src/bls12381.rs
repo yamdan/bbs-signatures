@@ -507,10 +507,15 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         ProofNonce::hash(&request.nonce)
     };
 
-    let mut equivs_map: HashMap<(usize, usize), usize> = HashMap::new();
-    for (i, eq) in request.equivs.iter().enumerate() {
-        for &e in eq {
-            equivs_map.insert(e, i);
+    // prepare equivs_map from request.equivs
+    //   e.g., request.equivs = [[[0,2], [0,8], [1,4]], [[0,6], [2,12]]]
+    //      => equivs_map     = [{2: 0, 6: 1, 8: 0}, {4: 0}, {12: 1}]
+    let mut equivs_map: Vec<HashMap<usize, usize>> = vec![HashMap::new(); num_of_inputs];
+    let mut partial_hidden_set: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); num_of_inputs];
+    for (anon_i, eq) in request.equivs.iter().enumerate() {
+        for &(cred_i, term_i) in eq {
+            equivs_map[cred_i].insert(term_i, anon_i);
+            partial_hidden_set[cred_i].insert(term_i);
         }
     }
 
@@ -518,35 +523,51 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     //     ch = H(bases_1, cmts_1, ..., bases_n, cmts_n, nonce)
     let mut proof_requests: Vec<ProofRequest> = Vec::with_capacity(num_of_inputs);
     let mut proofs: Vec<SignatureProof> = Vec::with_capacity(num_of_inputs);
+    let mut index_map: Vec<HashMap<usize, usize>> = Vec::with_capacity(num_of_inputs);
+    let mut hidden_orig_vecs: Vec<Vec<usize>> = Vec::with_capacity(num_of_inputs);
     for (i, (r_messages, r_proof, r_pk)) in
         multizip((request.messages, request.proof, request.publicKey)).enumerate()
     {
         let (message_count, revealed_vec, proof) = r_proof.unwrap();
         let pk = r_pk.to_public_key(message_count)?;
-        let mut revealed_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
 
-        let mut revealed_messages = BTreeMap::new();
-        for m_index in 0..revealed_vec.len() {
-            let original_m_index = revealed_vec[m_index];
-            match equivs_map.get(&(i, m_index)) {
-                None => {
-                    revealed_messages.insert(
-                        original_m_index,
-                        SignatureMessage::hash(r_messages[m_index].clone()),
-                    );
-                }
-                Some(&_k) => {
-                    revealed_set.remove(&original_m_index);
-                }
+        // prepare index_map
+        index_map.push(revealed_vec.clone().into_iter().enumerate().collect());
+
+        // prepare hidden_orig_vecs
+        let mut partial_hidden_orig_set: BTreeSet<usize> = BTreeSet::new();
+        for x in &partial_hidden_set[i] {
+            partial_hidden_orig_set.insert(*index_map[i].get(x).unwrap());
+        }
+        let pre_revealed_orig_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
+        let revealed_orig_set: BTreeSet<usize> = pre_revealed_orig_set
+            .difference(&partial_hidden_orig_set)
+            .cloned()
+            .collect();
+        let all_orig_set: BTreeSet<usize> = (0..message_count).collect();
+        let hidden_orig_vec: Vec<usize> = all_orig_set
+            .difference(&revealed_orig_set)
+            .cloned()
+            .collect();
+        hidden_orig_vecs.push(hidden_orig_vec);
+
+        // prepare revealed_messages
+        let mut revealed_messages: BTreeMap<usize, SignatureMessage> = BTreeMap::new();
+        for (m_index, m) in r_messages.iter().enumerate() {
+            let m_index_orig = *index_map[i].get(&m_index).unwrap();
+            if revealed_orig_set.contains(&m_index_orig) {
+                revealed_messages.insert(m_index_orig, SignatureMessage::hash(m.clone()));
             }
         }
 
+        // prepare proof_requests
         let proof_request = ProofRequest {
-            revealed_messages: revealed_set,
+            revealed_messages: revealed_orig_set,
             verification_key: pk,
         };
         proof_requests.push(proof_request);
 
+        // prepare proofs
         let signature_proof = SignatureProof {
             revealed_messages,
             proof,
@@ -554,8 +575,39 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         proofs.push(signature_proof);
     }
 
-    // (2) challenge hashing
+    // equality checks
+    let mut resps: Vec<BTreeSet<SignatureMessage>> = request
+        .equivs
+        .iter()
+        .map(|_| BTreeSet::<SignatureMessage>::new())
+        .collect();
+    for (anon_i, eq) in request.equivs.iter().enumerate() {
+        for &(cred_i, term_i) in eq {
+            resps[anon_i].insert(
+                proofs[cred_i]
+                    .proof
+                    .get_resp_for_message(
+                        hidden_orig_vecs[cred_i]
+                            .iter()
+                            .position(|x| x == index_map[cred_i].get(&term_i).unwrap())
+                            .unwrap(),
+                    )
+                    .unwrap(),
+            );
+            if resps[anon_i].len() >= 2 {
+                return Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
+                    verified: false,
+                    error: Some(format!(
+                        "failed verification of message equality related to `anon:{}`",
+                        anon_i
+                    )),
+                })
+                .unwrap());
+            }
+        }
+    }
 
+    // (2) challenge hashing
     let challenge =
         Verifier::create_challenge_hash(&proofs, &proof_requests, &nonce, None).unwrap();
 
