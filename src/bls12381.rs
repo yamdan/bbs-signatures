@@ -428,26 +428,22 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         }
         let pk = r_pk.to_public_key(r_messages.len())?;
         let revealed: BTreeSet<&usize> = r_revealed.iter().collect();
-        let mut messages = Vec::with_capacity(r_messages.len());
-        for (j, r_message) in r_messages.iter().enumerate() {
-            if revealed.contains(&j) {
-                match equivs_map.get(&(i, j)) {
-                    None => {
-                        messages.push(ProofMessage::Revealed(SignatureMessage::hash(&r_message)))
-                    }
-                    Some(&k) => {
-                        messages.push(ProofMessage::Hidden(HiddenMessage::ExternalBlinding(
-                            SignatureMessage::hash(&r_message),
-                            equiv_blindings[k],
-                        )))
-                    }
-                }
-            } else {
-                messages.push(ProofMessage::Hidden(HiddenMessage::ProofSpecificBlinding(
-                    SignatureMessage::hash(&r_message),
-                )));
-            }
-        }
+        let messages: Vec<ProofMessage> = r_messages
+            .iter()
+            .enumerate()
+            .map(
+                |(j, r_message)| match (revealed.contains(&j), equivs_map.get(&(i, j))) {
+                    (true, None) => ProofMessage::Revealed(SignatureMessage::hash(&r_message)),
+                    (true, Some(&k)) => ProofMessage::Hidden(HiddenMessage::ExternalBlinding(
+                        SignatureMessage::hash(&r_message),
+                        equiv_blindings[k],
+                    )),
+                    _ => ProofMessage::Hidden(HiddenMessage::ProofSpecificBlinding(
+                        SignatureMessage::hash(&r_message),
+                    )),
+                },
+            )
+            .collect();
         match PoKOfSignature::init(&r_signature, &pk, messages.as_slice()) {
             Err(e) => return Err(JsValue::from(&format!("{:?}", e))),
             Ok(pok) => {
@@ -460,17 +456,8 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     // (2) challenge
     //     ch = H(bases_1, cmts_1, ..., bases_n, cmts_n, nonce)
-    let mut challenge_bytes = Vec::new();
-    for pok in &poks {
-        challenge_bytes.extend_from_slice(pok.to_bytes().as_slice());
-    }
-    if request.nonce.is_empty() {
-        challenge_bytes.extend_from_slice(&[0u8; FR_COMPRESSED_SIZE]);
-    } else {
-        let nonce = ProofNonce::hash(&request.nonce);
-        challenge_bytes.extend_from_slice(nonce.to_bytes_uncompressed_form().as_ref());
-    }
-    let challenge_hash = ProofChallenge::hash(&challenge_bytes);
+    let nonce = ProofNonce::hash(&request.nonce);
+    let challenge_hash = Prover::create_challenge_hash(&poks, None, &nonce).unwrap();
 
     // (3) response
     let mut proofs: Vec<PoKOfSignatureProofMultiWrapper> = Vec::with_capacity(num_of_inputs);
@@ -527,7 +514,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         }
     }
 
-    // (1) generate challenge hash
+    // (1) prepare inputs for challenge hashing
     //     ch = H(bases_1, cmts_1, ..., bases_n, cmts_n, nonce)
     let mut proof_requests: Vec<ProofRequest> = Vec::with_capacity(num_of_inputs);
     let mut proofs: Vec<SignatureProof> = Vec::with_capacity(num_of_inputs);
@@ -536,27 +523,29 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     {
         let (message_count, revealed_vec, proof) = r_proof.unwrap();
         let pk = r_pk.to_public_key(message_count)?;
-        let revealed_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
+        let mut revealed_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
+
+        let mut revealed_messages = BTreeMap::new();
+        for m_index in 0..revealed_vec.len() {
+            let original_m_index = revealed_vec[m_index];
+            match equivs_map.get(&(i, m_index)) {
+                None => {
+                    revealed_messages.insert(
+                        original_m_index,
+                        SignatureMessage::hash(r_messages[m_index].clone()),
+                    );
+                }
+                Some(&_k) => {
+                    revealed_set.remove(&original_m_index);
+                }
+            }
+        }
+
         let proof_request = ProofRequest {
             revealed_messages: revealed_set,
             verification_key: pk,
         };
         proof_requests.push(proof_request);
-
-        let mut revealed_messages = BTreeMap::new();
-        for j in 0..revealed_vec.len() {
-            match equivs_map.get(&(i, j)) {
-                None => {
-                    revealed_messages.insert(
-                        revealed_vec[j],
-                        SignatureMessage::hash(r_messages[j].clone()),
-                    );
-                }
-                Some(&k) => {
-                    // TODO: do something
-                }
-            }
-        }
 
         let signature_proof = SignatureProof {
             revealed_messages,
@@ -565,10 +554,12 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         proofs.push(signature_proof);
     }
 
+    // (2) challenge hashing
+
     let challenge =
         Verifier::create_challenge_hash(&proofs, &proof_requests, &nonce, None).unwrap();
 
-    // (2) verify
+    // (3) verify
     let results: Vec<Result<Vec<SignatureMessage>, BBSError>> = proofs
         .iter()
         .zip(proof_requests.iter())
