@@ -25,7 +25,7 @@
 // );
 
 // force to use Wasm
-useWasm = true;
+const useWasm = true;
 
 // try {
 //   if (!useWasm) {
