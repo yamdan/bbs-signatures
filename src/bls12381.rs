@@ -507,14 +507,10 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         ProofNonce::hash(&request.nonce)
     };
 
-    // prepare equivs_map from request.equivs
-    //   e.g., request.equivs = [[[0,2], [0,8], [1,4]], [[0,6], [2,12]]]
-    //      => equivs_map     = [{2: 0, 6: 1, 8: 0}, {4: 0}, {12: 1}]
-    let mut equivs_map: Vec<HashMap<usize, usize>> = vec![HashMap::new(); num_of_inputs];
+    // prepare partial_hidden_set
     let mut partial_hidden_set: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); num_of_inputs];
-    for (anon_i, eq) in request.equivs.iter().enumerate() {
+    for (_, eq) in request.equivs.iter().enumerate() {
         for &(cred_i, term_i) in eq {
-            equivs_map[cred_i].insert(term_i, anon_i);
             partial_hidden_set[cred_i].insert(term_i);
         }
     }
