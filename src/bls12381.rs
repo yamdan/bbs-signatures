@@ -474,6 +474,10 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     Ok(serde_wasm_bindgen::to_value(&proofs).unwrap())
 }
 
+fn gen_verification_response(verified: bool, error: Option<String>) -> Result<JsValue, JsValue> {
+    Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse { verified, error }).unwrap())
+}
+
 /// Verify a BBS+ PoK from termwise-encoded multiple credentials
 #[wasm_bindgen(js_name = blsVerifyProofMulti)]
 pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue> {
@@ -482,13 +486,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     let request: BlsVerifyProofMultiContext;
     match res {
         Ok(r) => request = r,
-        Err(e) => {
-            return Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
-                verified: false,
-                error: Some(format!("{:?}", e)),
-            })
-            .unwrap())
-        }
+        Err(e) => return gen_verification_response(false, Some(format!("{:?}", e))),
     };
 
     let num_of_inputs = request.messages.len();
@@ -524,7 +522,17 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     for (i, (r_messages, r_proof, r_pk)) in
         multizip((request.messages, request.proof, request.publicKey)).enumerate()
     {
-        let (message_count, revealed_vec, proof) = r_proof.unwrap();
+        // let (message_count, revealed_vec, proof) = r_proof.unwrap();
+        let (message_count, revealed_vec, proof) = match r_proof.unwrap() {
+            Ok((m, v, p)) => (m, v, p),
+            Err(_) => {
+                return gen_verification_response(
+                    false,
+                    Some("failed to deserialize proofValue".to_string()),
+                )
+            }
+        };
+
         let pk = r_pk.to_public_key(message_count)?;
 
         // prepare index_map
@@ -591,14 +599,13 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
                     .unwrap(),
             );
             if resps[anon_i].len() >= 2 {
-                return Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
-                    verified: false,
-                    error: Some(format!(
+                return gen_verification_response(
+                    false,
+                    Some(format!(
                         "failed verification of message equality related to `anon:{}`",
                         anon_i
                     )),
-                })
-                .unwrap());
+                );
             }
         }
     }
@@ -627,16 +634,14 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         })
         .collect();
 
-    match results.iter().all(|r| r.is_ok()) {
-        true => Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
-            verified: true,
-            error: None,
-        })
-        .unwrap()),
-        false => Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
-            verified: false,
-            error: Some(format!("{:?}", results)),
-        })
-        .unwrap()),
+    let error_msg = results.iter().map(|r| match r {
+        Ok(_) => "".to_string(),
+        Err(e) => e.to_string(),
+    }).collect::<String>();
+
+    if error_msg.is_empty() {
+        gen_verification_response(true, None)
+    } else {
+        gen_verification_response(false, Some(format!("{:?}", error_msg)))
     }
 }

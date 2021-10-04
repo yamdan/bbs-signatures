@@ -76,8 +76,8 @@ impl PoKOfSignatureProofMultiWrapper {
         }
     }
 
-    pub fn unwrap(self) -> (usize, Vec<usize>, PoKOfSignatureProof) {
-        serde_cbor::from_slice(&self.value).unwrap()
+    pub fn unwrap(self) -> Result<(usize, Vec<usize>, PoKOfSignatureProof), serde_cbor::Error> {
+        serde_cbor::from_slice(&self.value)
     }
 }
 
