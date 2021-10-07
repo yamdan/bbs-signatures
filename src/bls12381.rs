@@ -601,10 +601,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             if resps[anon_i].len() >= 2 {
                 return gen_verification_response(
                     false,
-                    Some(format!(
-                        "failed verification of message equality related to `anon:{}`",
-                        anon_i
-                    )),
+                    Some("failed verification of message equality".to_string()),
                 );
             }
         }
@@ -634,10 +631,13 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         })
         .collect();
 
-    let error_msg = results.iter().map(|r| match r {
-        Ok(_) => "".to_string(),
-        Err(e) => e.to_string(),
-    }).collect::<String>();
+    let error_msg = results
+        .iter()
+        .map(|r| match r {
+            Ok(_) => "".to_string(),
+            Err(e) => e.to_string(),
+        })
+        .collect::<String>();
 
     if error_msg.is_empty() {
         gen_verification_response(true, None)
