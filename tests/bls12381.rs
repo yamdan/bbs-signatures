@@ -17,7 +17,9 @@
 extern crate wasm_bindgen_test;
 use bbs::prelude::*;
 use wasm::prelude::*;
+use wasm::BbsVerifyResponse;
 // use wasm::log;
+use arrayref::array_ref;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -128,4 +130,74 @@ async fn bls_generate_key_test() {
     let secretKey = js_sys::Array::from(&values.get(1));
     assert_eq!(publicKey.length(), 96);
     assert_eq!(secretKey.length(), 32);
+}
+
+#[allow(non_snake_case)]
+#[wasm_bindgen_test]
+pub async fn bls_sign_tests() {
+    // issue credential1
+    let key_pair_js1 = bls_generate_g2_key(None).await.unwrap();
+    let messages1 = vec![
+        b"Message11".to_vec(),
+        b"Message12".to_vec(),
+        b"Message**".to_vec(),
+    ];
+    let sign_request1 = BlsBbsSignRequest {
+        keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js1.clone()).unwrap(),
+        messages: messages1.clone(),
+    };
+    let sign_request_js1 = serde_wasm_bindgen::to_value(&sign_request1).unwrap();
+    let signature_js1 = bls_sign(sign_request_js1).await.unwrap();
+    let signature1 = serde_wasm_bindgen::from_value::<Signature>(signature_js1).unwrap();
+
+    // verify credential1
+    let dpk_bytes1 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js1.clone())
+        .unwrap()
+        .publicKey
+        .unwrap();
+    let dpk1 = DeterministicPublicKey::from(array_ref![dpk_bytes1, 0, G2_COMPRESSED_SIZE]);
+    let verify_request1 = BlsBbsVerifyRequest {
+        publicKey: dpk1,
+        signature: signature1,
+        messages: messages1.clone(),
+    };
+    let verify_request_js1 = serde_wasm_bindgen::to_value(&verify_request1).unwrap();
+    let verify_result_js1 = bls_verify(verify_request_js1).await.unwrap();
+    let verify_result1 =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_result_js1).unwrap();
+    assert!(verify_result1.verified);
+
+    // issue credential2
+    let key_pair_js2 = bls_generate_g2_key(None).await.unwrap();
+    let messages2 = vec![
+        b"Message21".to_vec(),
+        b"Message**".to_vec(),
+        b"Message23".to_vec(),
+    ];
+    let sign_request2 = BlsBbsSignRequest {
+        keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js2.clone()).unwrap(),
+        messages: messages2.clone(),
+    };
+    let sign_request_js2 = serde_wasm_bindgen::to_value(&sign_request2).unwrap();
+    let signature_js2 = bls_sign(sign_request_js2).await.unwrap();
+    let signature2 = serde_wasm_bindgen::from_value::<Signature>(signature_js2).unwrap();
+
+    // verify credential2
+    let dpk_bytes2 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js2.clone())
+        .unwrap()
+        .publicKey
+        .unwrap();
+    let dpk2 = DeterministicPublicKey::from(array_ref![dpk_bytes2, 0, G2_COMPRESSED_SIZE]);
+    let verify_request2 = BlsBbsVerifyRequest {
+        publicKey: dpk2,
+        signature: signature2,
+        messages: messages2.clone(),
+    };
+    let verify_request_js2 = serde_wasm_bindgen::to_value(&verify_request2).unwrap();
+    let verify_result_js2 = bls_verify(verify_request_js2).await.unwrap();
+    let verify_result2 =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_result_js2).unwrap();
+    assert!(verify_result2.verified);
+
+    // TBD: derive credential
 }
