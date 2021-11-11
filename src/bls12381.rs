@@ -505,7 +505,9 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         ProofNonce::hash(&request.nonce)
     };
 
-    // prepare partial_hidden_set
+    // Prepare partial_hidden_set,
+    //   each of which contains hidden indices included in equivalence classes;
+    // This **partial** set will be integrated with revealed_vec to calculate hidden_orig_vec
     let mut partial_hidden_set: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); num_of_inputs];
     for (_, eq) in request.equivs.iter().enumerate() {
         for &(cred_i, term_i) in eq {
@@ -522,7 +524,6 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     for (i, (r_messages, r_proof, r_pk)) in
         multizip((request.messages, request.proof, request.publicKey)).enumerate()
     {
-        // let (message_count, revealed_vec, proof) = r_proof.unwrap();
         let (message_count, revealed_vec, proof) = match r_proof.unwrap() {
             Ok((m, v, p)) => (m, v, p),
             Err(_) => {
@@ -535,7 +536,11 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
         let pk = r_pk.to_public_key(message_count)?;
 
-        // prepare index_map
+        // Construct index mapping from revealed indicies
+        // e.g., revealed_vec = [0, 10, 4]
+        //   --> index_map[i] = {0: 0, 1; 10, 2: 4}
+        // The index_map maps an index in revealed statements
+        //   to the corresponding index in the original signed statements
         index_map.push(revealed_vec.clone().into_iter().enumerate().collect());
 
         // prepare hidden_orig_vecs
@@ -588,9 +593,9 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     for (anon_i, eq) in request.equivs.iter().enumerate() {
         for &(cred_i, term_i) in eq {
             let resp = proofs[cred_i].proof.get_resp_for_message(
-                        hidden_orig_vecs[cred_i]
-                            .iter()
-                            .position(|x| x == index_map[cred_i].get(&term_i).unwrap())
+                hidden_orig_vecs[cred_i]
+                    .iter()
+                    .position(|x| x == index_map[cred_i].get(&term_i).unwrap())
                     .unwrap(),
             );
             match resp {
