@@ -587,17 +587,21 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         .collect();
     for (anon_i, eq) in request.equivs.iter().enumerate() {
         for &(cred_i, term_i) in eq {
-            resps[anon_i].insert(
-                proofs[cred_i]
-                    .proof
-                    .get_resp_for_message(
+            let resp = proofs[cred_i].proof.get_resp_for_message(
                         hidden_orig_vecs[cred_i]
                             .iter()
                             .position(|x| x == index_map[cred_i].get(&term_i).unwrap())
-                            .unwrap(),
-                    )
                     .unwrap(),
             );
+            match resp {
+                Ok(r) => resps[anon_i].insert(r),
+                Err(e) => {
+                    return gen_verification_response(
+                        false,
+                        Some(format!("failed verification of message equality: {}", e)),
+                    )
+                }
+            };
             if resps[anon_i].len() >= 2 {
                 return gen_verification_response(
                     false,
