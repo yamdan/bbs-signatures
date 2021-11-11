@@ -18,6 +18,7 @@ extern crate wasm_bindgen_test;
 use bbs::prelude::*;
 use wasm::prelude::*;
 use wasm::BbsVerifyResponse;
+use wasm::PoKOfSignatureProofMultiWrapper;
 // use wasm::log;
 use arrayref::array_ref;
 use wasm_bindgen_test::*;
@@ -134,13 +135,424 @@ async fn bls_generate_key_test() {
 
 #[allow(non_snake_case)]
 #[wasm_bindgen_test]
-pub async fn bls_sign_tests() {
-    // issue credential1
+pub async fn bls_single_whole_success_test() {
+    // issue credential
+    let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
+    let messages0 = vec![
+        b"Message[0,0]".to_vec(),
+        b"Message[0,1]".to_vec(),
+        b"Message_EQ_0".to_vec(),
+        b"Message_EQ_0".to_vec(),
+        b"Message[0,4]".to_vec(),
+    ];
+    let sign_request0 = BlsBbsSignRequest {
+        keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
+        messages: messages0.clone(),
+    };
+    let sign_request_js0 = serde_wasm_bindgen::to_value(&sign_request0).unwrap();
+    let signature_js0 = bls_sign(sign_request_js0).await.unwrap();
+    let signature0 = serde_wasm_bindgen::from_value::<Signature>(signature_js0).unwrap();
+
+    // verify credential
+    let dpk_bytes0 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone())
+        .unwrap()
+        .publicKey
+        .unwrap();
+    let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
+    let verify_request0 = BlsBbsVerifyRequest {
+        publicKey: dpk0,
+        signature: signature0.clone(),
+        messages: messages0.clone(),
+    };
+    let verify_request_js0 = serde_wasm_bindgen::to_value(&verify_request0).unwrap();
+    let verify_result_js0 = bls_verify(verify_request_js0).await.unwrap();
+    let verify_result0 =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_result_js0).unwrap();
+    assert!(verify_result0.verified);
+
+    // derive credential
+    let revealed0 = vec![0, 1, 2, 3];
+    let eq0 = vec![(0, 2), (0, 3)]; // equivalence class corresponding to "Message_EQ_0"
+    let derive_proof_request = BlsCreateProofMultiRequest {
+        signature: vec![signature0],
+        publicKey: vec![dpk0],
+        messages: vec![messages0],
+        revealed: vec![revealed0],
+        nonce: vec![0],
+        equivs: vec![eq0],
+    };
+    let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
+    let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
+    assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
+    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
+        derived_proofs_js.unwrap(),
+    )
+    .unwrap();
+    assert_eq!(derived_proofs.len(), 1);
+
+    // verify derived proof
+    let revealed_messages0 = vec![
+        b"Message[0,0]".to_vec(), // revealed
+        b"Message[0,1]".to_vec(), // revealed
+        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_0"
+        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_0"
+                                  // hidden;                        was "Message[0,4]"
+    ];
+    let eqv0 = vec![(0, 2), (0, 3)]; // equivalence class corresponding to "___DUMMY_EQ_0_"
+    let verify_proof_request = BlsVerifyProofMultiContext {
+        proof: derived_proofs,
+        publicKey: vec![dpk0],
+        messages: vec![revealed_messages0],
+        nonce: vec![0],
+        equivs: vec![eqv0],
+    };
+    let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
+    let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
+        .await
+        .unwrap();
+    let verify_proof_result =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
+    assert!(verify_proof_result.verified, "{:?}", verify_proof_result.error);
+}
+
+#[allow(non_snake_case)]
+#[wasm_bindgen_test]
+pub async fn bls_single_invalid_derive_test() {
+    // issue credential
+    let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
+    let messages0 = vec![
+        b"Message[0,0]".to_vec(),
+        b"Message[0,1]".to_vec(),
+        b"Message[0,2]".to_vec(),
+        b"Message[0,3]".to_vec(),
+        b"Message[0,4]".to_vec(),
+    ];
+    let sign_request0 = BlsBbsSignRequest {
+        keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
+        messages: messages0.clone(),
+    };
+    let sign_request_js0 = serde_wasm_bindgen::to_value(&sign_request0).unwrap();
+    let signature_js0 = bls_sign(sign_request_js0).await.unwrap();
+    let signature0 = serde_wasm_bindgen::from_value::<Signature>(signature_js0).unwrap();
+
+    // derive credential
+    let dpk_bytes0 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone())
+        .unwrap()
+        .publicKey
+        .unwrap();
+    let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
+    let revealed0 = vec![0, 1, 2, 3];
+    let eq0 = vec![(0, 2), (0, 3)]; // equivalence class with inconsistency; Message[0,2] != Message[0,3]
+    let derive_proof_request = BlsCreateProofMultiRequest {
+        signature: vec![signature0],
+        publicKey: vec![dpk0],
+        messages: vec![messages0],
+        revealed: vec![revealed0],
+        nonce: vec![0],
+        equivs: vec![eq0],
+    };
+    let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
+    let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
+    assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
+    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
+        derived_proofs_js.unwrap(),
+    )
+    .unwrap();
+    assert_eq!(derived_proofs.len(), 1);
+
+    // verify derived proof
+    let revealed_messages0 = vec![
+        b"Message[0,0]".to_vec(), // revealed
+        b"Message[0,1]".to_vec(), // revealed
+        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message[0,2]"
+        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message[0,3]"
+                                  // hidden;                        was "Message[0,4]"
+    ];
+    let eqv0 = vec![(0, 2), (0, 3)]; // equivalence class corresponding to two different "Message[0,2]" and "Message[0,3]" incorrectly
+    let verify_proof_request = BlsVerifyProofMultiContext {
+        proof: derived_proofs,
+        publicKey: vec![dpk0],
+        messages: vec![revealed_messages0],
+        nonce: vec![0],
+        equivs: vec![eqv0],
+    };
+    let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
+    let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
+        .await
+        .unwrap();
+    let verify_proof_result =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
+    assert!(!verify_proof_result.verified);
+}
+
+#[allow(non_snake_case)]
+#[wasm_bindgen_test]
+pub async fn bls_single_reverse_index_test() {
+    // issue credential
+    let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
+    let messages0 = vec![
+        b"Message[0,0]".to_vec(),
+        b"Message[0,1]".to_vec(),
+        b"Message[0,2]".to_vec(),
+        b"Message[0,3]".to_vec(),
+        b"Message[0,4]".to_vec(),
+    ];
+    let sign_request0 = BlsBbsSignRequest {
+        keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
+        messages: messages0.clone(),
+    };
+    let sign_request_js0 = serde_wasm_bindgen::to_value(&sign_request0).unwrap();
+    let signature_js0 = bls_sign(sign_request_js0).await.unwrap();
+    let signature0 = serde_wasm_bindgen::from_value::<Signature>(signature_js0).unwrap();
+
+    // derive credential
+    let dpk_bytes0 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone())
+        .unwrap()
+        .publicKey
+        .unwrap();
+    let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
+    let revealed0 = vec![4, 3, 2, 1, 0];
+    let derive_proof_request = BlsCreateProofMultiRequest {
+        signature: vec![signature0],
+        publicKey: vec![dpk0],
+        messages: vec![messages0],
+        revealed: vec![revealed0],
+        nonce: vec![0],
+        equivs: vec![],
+    };
+    let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
+    let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
+    assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
+    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
+        derived_proofs_js.unwrap(),
+    )
+    .unwrap();
+    assert_eq!(derived_proofs.len(), 1);
+
+    // verify derived proof
+    let revealed_messages0 = vec![
+        b"Message[0,4]".to_vec(), // revealed
+        b"Message[0,3]".to_vec(), // revealed
+        b"Message[0,2]".to_vec(), // revealed
+        b"Message[0,1]".to_vec(), // revealed
+        b"Message[0,0]".to_vec(), // revealed
+    ];
+    let verify_proof_request = BlsVerifyProofMultiContext {
+        proof: derived_proofs,
+        publicKey: vec![dpk0],
+        messages: vec![revealed_messages0],
+        nonce: vec![0],
+        equivs: vec![],
+    };
+    let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
+    let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
+        .await
+        .unwrap();
+    let verify_proof_result =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
+    assert!(verify_proof_result.verified, "{:?}", verify_proof_result.error);
+}
+
+#[allow(non_snake_case)]
+#[wasm_bindgen_test]
+pub async fn bls_single_out_of_revealed_index_test() {
+    // issue credential
+    let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
+    let messages0 = vec![b"Message[0,0]".to_vec(), b"Message[0,1]".to_vec()];
+    let sign_request0 = BlsBbsSignRequest {
+        keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
+        messages: messages0.clone(),
+    };
+    let sign_request_js0 = serde_wasm_bindgen::to_value(&sign_request0).unwrap();
+    let signature_js0 = bls_sign(sign_request_js0).await.unwrap();
+    let signature0 = serde_wasm_bindgen::from_value::<Signature>(signature_js0).unwrap();
+
+    // derive credential
+    let dpk_bytes0 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone())
+        .unwrap()
+        .publicKey
+        .unwrap();
+    let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
+    let revealed0 = vec![0, 1, 100]; // invalid index 100
+    let derive_proof_request = BlsCreateProofMultiRequest {
+        signature: vec![signature0],
+        publicKey: vec![dpk0],
+        messages: vec![messages0],
+        revealed: vec![revealed0],
+        nonce: vec![0],
+        equivs: vec![],
+    };
+    let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
+    let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
+    assert!(derived_proofs_js.is_err());
+}
+
+#[allow(non_snake_case)]
+#[wasm_bindgen_test]
+pub async fn bls_single_meaningless_equivs_test() {
+    // issue credential
+    let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
+    let messages0 = vec![b"Message[0,0]".to_vec(), b"Message[0,1]".to_vec()];
+    let sign_request0 = BlsBbsSignRequest {
+        keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
+        messages: messages0.clone(),
+    };
+    let sign_request_js0 = serde_wasm_bindgen::to_value(&sign_request0).unwrap();
+    let signature_js0 = bls_sign(sign_request_js0).await.unwrap();
+    let signature0 = serde_wasm_bindgen::from_value::<Signature>(signature_js0).unwrap();
+
+    // derive credential
+    let dpk_bytes0 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone())
+        .unwrap()
+        .publicKey
+        .unwrap();
+    let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
+    let revealed0 = vec![0, 1];
+    let eq0 = vec![(0, 0)]; // equivalence class with only one element (meaningless)
+    let derive_proof_request = BlsCreateProofMultiRequest {
+        signature: vec![signature0],
+        publicKey: vec![dpk0],
+        messages: vec![messages0],
+        revealed: vec![revealed0],
+        nonce: vec![0],
+        equivs: vec![eq0],
+    };
+    let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
+    let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
+    assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
+    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
+        derived_proofs_js.unwrap(),
+    )
+    .unwrap();
+    assert_eq!(derived_proofs.len(), 1);
+
+    // verify derived proof
+    let revealed_messages0 = vec![
+        b"Message[0,0]".to_vec(), // revealed
+        b"Message[0,1]".to_vec(), // revealed
+    ];
+    let eqv0 = vec![(0, 0)]; // equivalence class with only one element (meaningless)
+    let verify_proof_request = BlsVerifyProofMultiContext {
+        proof: derived_proofs,
+        publicKey: vec![dpk0],
+        messages: vec![revealed_messages0],
+        nonce: vec![0],
+        equivs: vec![eqv0],
+    };
+    let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
+    let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
+        .await
+        .unwrap();
+    let verify_proof_result =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
+    assert!(verify_proof_result.verified, "{:?}", verify_proof_result.error);
+}
+
+#[allow(non_snake_case)]
+#[wasm_bindgen_test]
+pub async fn bls_single_invalid_equivs_test() {
+    // issue credential
+    let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
+    let messages0 = vec![b"Message[0,0]".to_vec(), b"Message[0,1]".to_vec()];
+    let sign_request0 = BlsBbsSignRequest {
+        keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
+        messages: messages0.clone(),
+    };
+    let sign_request_js0 = serde_wasm_bindgen::to_value(&sign_request0).unwrap();
+    let signature_js0 = bls_sign(sign_request_js0).await.unwrap();
+    let signature0 = serde_wasm_bindgen::from_value::<Signature>(signature_js0).unwrap();
+
+    // derive credential
+    let dpk_bytes0 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone())
+        .unwrap()
+        .publicKey
+        .unwrap();
+    let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
+    let revealed0 = vec![0, 1]; // all revealed
+    let derive_proof_request = BlsCreateProofMultiRequest {
+        signature: vec![signature0],
+        publicKey: vec![dpk0],
+        messages: vec![messages0],
+        revealed: vec![revealed0],
+        nonce: vec![0],
+        equivs: vec![], // no equivalence class is given
+    };
+    let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
+    let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
+    assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
+    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
+        derived_proofs_js.unwrap(),
+    )
+    .unwrap();
+    assert_eq!(derived_proofs.len(), 1);
+
+    // verify derived proof
+    let revealed_messages0 = vec![
+        b"Message[0,0]".to_vec(), // revealed
+        b"Message[0,1]".to_vec(), // revealed
+    ];
+    let eqv0 = vec![(0, 0)]; // inconsistent equivalence class that is not given during deriveProof
+    let verify_proof_request = BlsVerifyProofMultiContext {
+        proof: derived_proofs,
+        publicKey: vec![dpk0],
+        messages: vec![revealed_messages0],
+        nonce: vec![0],
+        equivs: vec![eqv0], // inconsistent equivalence class
+    };
+    let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
+    let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
+        .await
+        .unwrap();
+    let verify_proof_result =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
+    assert!(!verify_proof_result.verified, "{:?}", verify_proof_result.error);
+}
+
+#[allow(non_snake_case)]
+#[wasm_bindgen_test]
+pub async fn bls_multi_whole_success_test() {
+    // issue credential [0]
+    let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
+    let messages0 = vec![
+        b"Message[0,0]".to_vec(),
+        b"Message[0,1]".to_vec(),
+        b"Message_EQ_0".to_vec(),
+        b"Message_EQ_1".to_vec(),
+        b"Message[0,4]".to_vec(),
+    ];
+    let sign_request0 = BlsBbsSignRequest {
+        keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
+        messages: messages0.clone(),
+    };
+    let sign_request_js0 = serde_wasm_bindgen::to_value(&sign_request0).unwrap();
+    let signature_js0 = bls_sign(sign_request_js0).await.unwrap();
+    let signature0 = serde_wasm_bindgen::from_value::<Signature>(signature_js0).unwrap();
+
+    // verify credential [0]
+    let dpk_bytes0 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone())
+        .unwrap()
+        .publicKey
+        .unwrap();
+    let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
+    let verify_request0 = BlsBbsVerifyRequest {
+        publicKey: dpk0,
+        signature: signature0.clone(),
+        messages: messages0.clone(),
+    };
+    let verify_request_js0 = serde_wasm_bindgen::to_value(&verify_request0).unwrap();
+    let verify_result_js0 = bls_verify(verify_request_js0).await.unwrap();
+    let verify_result0 =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_result_js0).unwrap();
+    assert!(verify_result0.verified);
+
+    // issue credential [1]
     let key_pair_js1 = bls_generate_g2_key(None).await.unwrap();
     let messages1 = vec![
-        b"Message11".to_vec(),
-        b"Message12".to_vec(),
-        b"Message**".to_vec(),
+        b"Message[1,0]".to_vec(),
+        b"Message_EQ_1".to_vec(),
+        b"Message[1,2]".to_vec(),
+        b"Message_EQ_0".to_vec(),
+        b"Message[1,4]".to_vec(),
     ];
     let sign_request1 = BlsBbsSignRequest {
         keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js1.clone()).unwrap(),
@@ -150,7 +562,7 @@ pub async fn bls_sign_tests() {
     let signature_js1 = bls_sign(sign_request_js1).await.unwrap();
     let signature1 = serde_wasm_bindgen::from_value::<Signature>(signature_js1).unwrap();
 
-    // verify credential1
+    // verify credential [1]
     let dpk_bytes1 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js1.clone())
         .unwrap()
         .publicKey
@@ -158,7 +570,7 @@ pub async fn bls_sign_tests() {
     let dpk1 = DeterministicPublicKey::from(array_ref![dpk_bytes1, 0, G2_COMPRESSED_SIZE]);
     let verify_request1 = BlsBbsVerifyRequest {
         publicKey: dpk1,
-        signature: signature1,
+        signature: signature1.clone(),
         messages: messages1.clone(),
     };
     let verify_request_js1 = serde_wasm_bindgen::to_value(&verify_request1).unwrap();
@@ -167,37 +579,57 @@ pub async fn bls_sign_tests() {
         serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_result_js1).unwrap();
     assert!(verify_result1.verified);
 
-    // issue credential2
-    let key_pair_js2 = bls_generate_g2_key(None).await.unwrap();
-    let messages2 = vec![
-        b"Message21".to_vec(),
-        b"Message**".to_vec(),
-        b"Message23".to_vec(),
+    // derive credential
+    let revealed0 = vec![0, 1, 2, 3]; // messages0 will be revealed except for index 4
+    let revealed1 = vec![3, 2, 1, 0]; // messages1 will be revealed in reversed order except for index 4
+    let eq0 = vec![(0, 2), (1, 3)]; // equivalence class corresponding to "Message_EQ_0"
+    let eq1 = vec![(0, 3), (1, 1)]; // equivalence class corresponding to "Message_EQ_1"
+    let derive_proof_request = BlsCreateProofMultiRequest {
+        signature: vec![signature0, signature1],
+        publicKey: vec![dpk0, dpk1],
+        messages: vec![messages0, messages1],
+        revealed: vec![revealed0, revealed1],
+        nonce: vec![0],
+        equivs: vec![eq0, eq1],
+    };
+    let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
+    let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
+    assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
+    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
+        derived_proofs_js.unwrap(),
+    )
+    .unwrap();
+    assert_eq!(derived_proofs.len(), 2);
+
+    // verify derived proofs
+    let revealed_messages0 = vec![
+        b"Message[0,0]".to_vec(), // revealed
+        b"Message[0,1]".to_vec(), // revealed
+        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_0"
+        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_1"
+                                  // hidden;                        was "Message[0,4]"
     ];
-    let sign_request2 = BlsBbsSignRequest {
-        keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js2.clone()).unwrap(),
-        messages: messages2.clone(),
+    let revealed_messages1 = vec![
+        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_0"; moved from [1,3] to [1,0]
+        b"Message[1,2]".to_vec(), // revealed;                                          moved from [1,2] to [1,1]
+        b"___DUMMY____".to_vec(), // hidden with proof of eqaulity; was "Message_EQ_1"; moved from [1,1] to [1,2]
+        b"Message[1,0]".to_vec(), // revealed;                                          moved from [1,0] to [1,3]
+                                  // hidden;                        was "Message[1,4]"
+    ];
+    let eqv0 = vec![(0, 2), (1, 0)]; // equivalence class corresponding to "Message_EQ_0"
+    let eqv1 = vec![(0, 3), (1, 2)]; // equivalence class corresponding to "Message_EQ_1"
+    let verify_proof_request = BlsVerifyProofMultiContext {
+        proof: derived_proofs,
+        publicKey: vec![dpk0, dpk1],
+        messages: vec![revealed_messages0, revealed_messages1],
+        nonce: vec![0],
+        equivs: vec![eqv0, eqv1],
     };
-    let sign_request_js2 = serde_wasm_bindgen::to_value(&sign_request2).unwrap();
-    let signature_js2 = bls_sign(sign_request_js2).await.unwrap();
-    let signature2 = serde_wasm_bindgen::from_value::<Signature>(signature_js2).unwrap();
-
-    // verify credential2
-    let dpk_bytes2 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js2.clone())
-        .unwrap()
-        .publicKey
+    let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
+    let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
+        .await
         .unwrap();
-    let dpk2 = DeterministicPublicKey::from(array_ref![dpk_bytes2, 0, G2_COMPRESSED_SIZE]);
-    let verify_request2 = BlsBbsVerifyRequest {
-        publicKey: dpk2,
-        signature: signature2,
-        messages: messages2.clone(),
-    };
-    let verify_request_js2 = serde_wasm_bindgen::to_value(&verify_request2).unwrap();
-    let verify_result_js2 = bls_verify(verify_request_js2).await.unwrap();
-    let verify_result2 =
-        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_result_js2).unwrap();
-    assert!(verify_result2.verified);
-
-    // TBD: derive credential
+    let verify_proof_result =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
+    assert!(verify_proof_result.verified, "{:?}", verify_proof_result.error);
 }
