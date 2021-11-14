@@ -498,6 +498,15 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             "numbers of messages, proof, and publicKey must be the same",
         ));
     }
+    if num_of_inputs == 0 {
+        return gen_verification_response(
+            false,
+            Some(
+                "at least one tuple of messages, proof, revealed, and publicKey must be given"
+                    .to_string(),
+            ),
+        );
+    }
 
     let nonce = if request.nonce.is_empty() {
         ProofNonce::default()
