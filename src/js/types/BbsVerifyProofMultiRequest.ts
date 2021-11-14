@@ -28,6 +28,10 @@ export interface BbsVerifyProofMultiRequest {
    */
   readonly messages: readonly Uint8Array[][];
   /**
+   * The zero based indicies of which messages to reveal (expected to be sorted)
+   */
+  readonly revealed: readonly number[][];
+  /**
    * Nonce included in the proof for the un-revealed attributes (OPTIONAL)
    */
   readonly nonce: Uint8Array;

@@ -177,7 +177,7 @@ pub async fn bls_single_whole_success_test() {
         signature: vec![signature0],
         publicKey: vec![dpk0],
         messages: vec![messages0],
-        revealed: vec![revealed0],
+        revealed: vec![revealed0.clone()],
         nonce: vec![0],
         equivs: vec![eq0],
     };
@@ -203,6 +203,7 @@ pub async fn bls_single_whole_success_test() {
         proof: derived_proofs,
         publicKey: vec![dpk0],
         messages: vec![revealed_messages0],
+        revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![eqv0],
     };
@@ -212,7 +213,11 @@ pub async fn bls_single_whole_success_test() {
         .unwrap();
     let verify_proof_result =
         serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
-    assert!(verify_proof_result.verified, "{:?}", verify_proof_result.error);
+    assert!(
+        verify_proof_result.verified,
+        "{:?}",
+        verify_proof_result.error
+    );
 }
 
 #[allow(non_snake_case)]
@@ -247,7 +252,7 @@ pub async fn bls_single_invalid_derive_test() {
         signature: vec![signature0],
         publicKey: vec![dpk0],
         messages: vec![messages0],
-        revealed: vec![revealed0],
+        revealed: vec![revealed0.clone()],
         nonce: vec![0],
         equivs: vec![eq0],
     };
@@ -273,6 +278,7 @@ pub async fn bls_single_invalid_derive_test() {
         proof: derived_proofs,
         publicKey: vec![dpk0],
         messages: vec![revealed_messages0],
+        revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![eqv0],
     };
@@ -287,7 +293,7 @@ pub async fn bls_single_invalid_derive_test() {
 
 #[allow(non_snake_case)]
 #[wasm_bindgen_test]
-pub async fn bls_single_reverse_index_test() {
+pub async fn bls_single_redundant_index_test() {
     // issue credential
     let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
     let messages0 = vec![
@@ -311,12 +317,12 @@ pub async fn bls_single_reverse_index_test() {
         .publicKey
         .unwrap();
     let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
-    let revealed0 = vec![4, 3, 2, 1, 0];
+    let revealed0 = vec![4, 0, 3, 3, 3]; // revealed indicies are regarded as set; reordering and duplicating should have no impact
     let derive_proof_request = BlsCreateProofMultiRequest {
         signature: vec![signature0],
         publicKey: vec![dpk0],
         messages: vec![messages0],
-        revealed: vec![revealed0],
+        revealed: vec![revealed0.clone()],
         nonce: vec![0],
         equivs: vec![],
     };
@@ -331,16 +337,17 @@ pub async fn bls_single_reverse_index_test() {
 
     // verify derived proof
     let revealed_messages0 = vec![
-        b"Message[0,4]".to_vec(), // revealed
-        b"Message[0,3]".to_vec(), // revealed
-        b"Message[0,2]".to_vec(), // revealed
-        b"Message[0,1]".to_vec(), // revealed
         b"Message[0,0]".to_vec(), // revealed
+        // hidden
+        // hidden
+        b"Message[0,3]".to_vec(), // revealed
+        b"Message[0,4]".to_vec(), // revealed
     ];
     let verify_proof_request = BlsVerifyProofMultiContext {
         proof: derived_proofs,
         publicKey: vec![dpk0],
         messages: vec![revealed_messages0],
+        revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![],
     };
@@ -350,7 +357,11 @@ pub async fn bls_single_reverse_index_test() {
         .unwrap();
     let verify_proof_result =
         serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
-    assert!(verify_proof_result.verified, "{:?}", verify_proof_result.error);
+    assert!(
+        verify_proof_result.verified,
+        "{:?}",
+        verify_proof_result.error
+    );
 }
 
 #[allow(non_snake_case)]
@@ -413,7 +424,7 @@ pub async fn bls_single_meaningless_equivs_test() {
         signature: vec![signature0],
         publicKey: vec![dpk0],
         messages: vec![messages0],
-        revealed: vec![revealed0],
+        revealed: vec![revealed0.clone()],
         nonce: vec![0],
         equivs: vec![eq0],
     };
@@ -436,6 +447,7 @@ pub async fn bls_single_meaningless_equivs_test() {
         proof: derived_proofs,
         publicKey: vec![dpk0],
         messages: vec![revealed_messages0],
+        revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![eqv0],
     };
@@ -445,7 +457,11 @@ pub async fn bls_single_meaningless_equivs_test() {
         .unwrap();
     let verify_proof_result =
         serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
-    assert!(verify_proof_result.verified, "{:?}", verify_proof_result.error);
+    assert!(
+        verify_proof_result.verified,
+        "{:?}",
+        verify_proof_result.error
+    );
 }
 
 #[allow(non_snake_case)]
@@ -473,7 +489,7 @@ pub async fn bls_single_invalid_equivs_test() {
         signature: vec![signature0],
         publicKey: vec![dpk0],
         messages: vec![messages0],
-        revealed: vec![revealed0],
+        revealed: vec![revealed0.clone()],
         nonce: vec![0],
         equivs: vec![], // no equivalence class is given
     };
@@ -496,6 +512,7 @@ pub async fn bls_single_invalid_equivs_test() {
         proof: derived_proofs,
         publicKey: vec![dpk0],
         messages: vec![revealed_messages0],
+        revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![eqv0], // inconsistent equivalence class
     };
@@ -505,6 +522,11 @@ pub async fn bls_single_invalid_equivs_test() {
         .unwrap();
     let verify_proof_result =
         serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
+    assert!(
+        !verify_proof_result.verified,
+        "{:?}",
+        verify_proof_result.error
+    );
 }
 
 #[allow(non_snake_case)]
@@ -602,14 +624,14 @@ pub async fn bls_multi_whole_success_test() {
 
     // derive credential
     let revealed0 = vec![0, 1, 2, 3]; // messages0 will be revealed except for index 4
-    let revealed1 = vec![3, 2, 1, 0]; // messages1 will be revealed in reversed order except for index 4
+    let revealed1 = vec![0, 1, 2, 3]; // messages1 will be revealed except for index 4
     let eq0 = vec![(0, 2), (1, 3)]; // equivalence class corresponding to "Message_EQ_0"
     let eq1 = vec![(0, 3), (1, 1)]; // equivalence class corresponding to "Message_EQ_1"
     let derive_proof_request = BlsCreateProofMultiRequest {
         signature: vec![signature0, signature1],
         publicKey: vec![dpk0, dpk1],
         messages: vec![messages0, messages1],
-        revealed: vec![revealed0, revealed1],
+        revealed: vec![revealed0.clone(), revealed1.clone()],
         nonce: vec![0],
         equivs: vec![eq0, eq1],
     };
@@ -631,18 +653,19 @@ pub async fn bls_multi_whole_success_test() {
                                   // hidden;                        was "Message[0,4]"
     ];
     let revealed_messages1 = vec![
-        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_0"; moved from [1,3] to [1,0]
-        b"Message[1,2]".to_vec(), // revealed;                                          moved from [1,2] to [1,1]
-        b"___DUMMY____".to_vec(), // hidden with proof of eqaulity; was "Message_EQ_1"; moved from [1,1] to [1,2]
-        b"Message[1,0]".to_vec(), // revealed;                                          moved from [1,0] to [1,3]
+        b"Message[1,0]".to_vec(), // revealed
+        b"___DUMMY____".to_vec(), // hidden with proof of eqaulity; was "Message_EQ_1"
+        b"Message[1,2]".to_vec(), // revealed
+        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_0"
                                   // hidden;                        was "Message[1,4]"
     ];
-    let eqv0 = vec![(0, 2), (1, 0)]; // equivalence class corresponding to "Message_EQ_0"
-    let eqv1 = vec![(0, 3), (1, 2)]; // equivalence class corresponding to "Message_EQ_1"
+    let eqv0 = vec![(0, 2), (1, 3)]; // equivalence class corresponding to "Message_EQ_0"
+    let eqv1 = vec![(0, 3), (1, 1)]; // equivalence class corresponding to "Message_EQ_1"
     let verify_proof_request = BlsVerifyProofMultiContext {
         proof: derived_proofs,
         publicKey: vec![dpk0, dpk1],
         messages: vec![revealed_messages0, revealed_messages1],
+        revealed: vec![revealed0, revealed1],
         nonce: vec![0],
         equivs: vec![eqv0, eqv1],
     };
@@ -652,5 +675,9 @@ pub async fn bls_multi_whole_success_test() {
         .unwrap();
     let verify_proof_result =
         serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
-    assert!(verify_proof_result.verified, "{:?}", verify_proof_result.error);
+    assert!(
+        verify_proof_result.verified,
+        "{:?}",
+        verify_proof_result.error
+    );
 }

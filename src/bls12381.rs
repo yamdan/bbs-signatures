@@ -102,6 +102,7 @@ wasm_impl!(
     proof: Vec<PoKOfSignatureProofMultiWrapper>,
     publicKey: Vec<DeterministicPublicKey>,
     messages: Vec<Vec<Vec<u8>>>,
+    revealed: Vec<Vec<usize>>,
     nonce: Vec<u8>,
     equivs: Vec<Vec<(usize, usize)>>
 );
@@ -399,7 +400,6 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     let mut poks: Vec<PoKOfSignature> = Vec::with_capacity(num_of_inputs);
     let mut message_counts: Vec<usize> = Vec::with_capacity(num_of_inputs);
-    let mut revealeds: Vec<Vec<usize>> = Vec::with_capacity(num_of_inputs);
 
     // generate blindings and hashmaps based on request.equivs
     let equiv_blindings: Vec<ProofNonce> = request
@@ -449,7 +449,6 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             Ok(pok) => {
                 poks.push(pok);
                 message_counts.push(r_messages.len());
-                revealeds.push(r_revealed);
             }
         }
     }
@@ -461,10 +460,10 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     // (3) response
     let mut proofs: Vec<PoKOfSignatureProofMultiWrapper> = Vec::with_capacity(num_of_inputs);
-    for (pok, message_count, revealed) in multizip((poks, message_counts, revealeds)) {
+    for (pok, message_count) in multizip((poks, message_counts)) {
         match pok.gen_proof(&challenge_hash) {
             Ok(proof) => {
-                let out = PoKOfSignatureProofMultiWrapper::new(message_count, revealed, proof);
+                let out = PoKOfSignatureProofMultiWrapper::new(message_count, proof);
                 proofs.push(out);
             }
             Err(e) => return Err(JsValue::from(&format!("{:?}", e))),
@@ -489,14 +488,22 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         Err(e) => return gen_verification_response(false, Some(format!("{:?}", e))),
     };
 
+    // check the numbers of input parameters
     let num_of_inputs = request.messages.len();
-    if [request.proof.len(), request.publicKey.len()]
-        .iter()
-        .any(|&x| x != num_of_inputs)
+    if [
+        request.proof.len(),
+        request.revealed.len(),
+        request.publicKey.len(),
+    ]
+    .iter()
+    .any(|&x| x != num_of_inputs)
     {
-        return Err(JsValue::from(
-            "numbers of messages, proof, and publicKey must be the same",
-        ));
+        return gen_verification_response(
+            false,
+            Some(
+                "numbers of messages, proof, revealed, and publicKey must be the same".to_string(),
+            ),
+        );
     }
     if num_of_inputs == 0 {
         return gen_verification_response(
@@ -528,13 +535,17 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     //     ch = H(bases_1, cmts_1, ..., bases_n, cmts_n, nonce)
     let mut proof_requests: Vec<ProofRequest> = Vec::with_capacity(num_of_inputs);
     let mut proofs: Vec<SignatureProof> = Vec::with_capacity(num_of_inputs);
-    let mut index_map: Vec<HashMap<usize, usize>> = Vec::with_capacity(num_of_inputs);
-    let mut hidden_orig_vecs: Vec<Vec<usize>> = Vec::with_capacity(num_of_inputs);
-    for (i, (r_messages, r_proof, r_pk)) in
-        multizip((request.messages, request.proof, request.publicKey)).enumerate()
+    let mut hidden_vecs: Vec<Vec<usize>> = Vec::with_capacity(num_of_inputs);
+    for (i, (messages, revealed_vec, r_proof, dpk)) in multizip((
+        request.messages,
+        request.revealed,
+        request.proof,
+        request.publicKey,
+    ))
+    .enumerate()
     {
-        let (message_count, revealed_vec, proof) = match r_proof.unwrap() {
-            Ok((m, v, p)) => (m, v, p),
+        let (message_count, proof) = match r_proof.unwrap() {
+            Ok((m, p)) => (m, p),
             Err(_) => {
                 return gen_verification_response(
                     false,
@@ -543,44 +554,31 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             }
         };
 
-        let pk = r_pk.to_public_key(message_count)?;
+        let pk = dpk.to_public_key(message_count)?;
 
-        // Construct index mapping from revealed indicies
-        // e.g., revealed_vec = [0, 10, 4]
-        //   --> index_map[i] = {0: 0, 1; 10, 2: 4}
-        // The index_map maps an index in revealed statements
-        //   to the corresponding index in the original signed statements
-        index_map.push(revealed_vec.clone().into_iter().enumerate().collect());
-
-        // prepare hidden_orig_vecs
-        let mut partial_hidden_orig_set: BTreeSet<usize> = BTreeSet::new();
-        for x in &partial_hidden_set[i] {
-            partial_hidden_orig_set.insert(*index_map[i].get(x).unwrap());
-        }
-        let pre_revealed_orig_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
-        let revealed_orig_set: BTreeSet<usize> = pre_revealed_orig_set
-            .difference(&partial_hidden_orig_set)
+        // prepare revealed_set and hidden_vecs
+        let all_set: BTreeSet<usize> = (0..message_count).collect();
+        let pre_revealed_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
+        let revealed_set: BTreeSet<usize> = pre_revealed_set
+            .difference(&partial_hidden_set[i])
             .cloned()
             .collect();
-        let all_orig_set: BTreeSet<usize> = (0..message_count).collect();
-        let hidden_orig_vec: Vec<usize> = all_orig_set
-            .difference(&revealed_orig_set)
-            .cloned()
-            .collect();
-        hidden_orig_vecs.push(hidden_orig_vec);
+        let hidden_vec: Vec<usize> = all_set.difference(&revealed_set).cloned().collect();
+        hidden_vecs.push(hidden_vec);
 
         // prepare revealed_messages
+        let index_map = pre_revealed_set.iter().collect::<Vec<&usize>>();
         let mut revealed_messages: BTreeMap<usize, SignatureMessage> = BTreeMap::new();
-        for (m_index, m) in r_messages.iter().enumerate() {
-            let m_index_orig = *index_map[i].get(&m_index).unwrap();
-            if revealed_orig_set.contains(&m_index_orig) {
-                revealed_messages.insert(m_index_orig, SignatureMessage::hash(m.clone()));
+        for (m_index, m) in messages.iter().enumerate() {
+            let m_index_orig = index_map[m_index];
+            if revealed_set.contains(m_index_orig) {
+                revealed_messages.insert(*m_index_orig, SignatureMessage::hash(m.clone()));
             }
         }
 
         // prepare proof_requests
         let proof_request = ProofRequest {
-            revealed_messages: revealed_orig_set,
+            revealed_messages: revealed_set,
             verification_key: pk,
         };
         proof_requests.push(proof_request);
@@ -602,9 +600,9 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     for (anon_i, eq) in request.equivs.iter().enumerate() {
         for &(cred_i, term_i) in eq {
             let resp = proofs[cred_i].proof.get_resp_for_message(
-                hidden_orig_vecs[cred_i]
+                hidden_vecs[cred_i]
                     .iter()
-                    .position(|x| x == index_map[cred_i].get(&term_i).unwrap())
+                    .position(|x| *x == term_i)
                     .unwrap(),
             );
             match resp {
