@@ -505,7 +505,28 @@ pub async fn bls_single_invalid_equivs_test() {
         .unwrap();
     let verify_proof_result =
         serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
-    assert!(!verify_proof_result.verified, "{:?}", verify_proof_result.error);
+}
+
+#[allow(non_snake_case)]
+#[wasm_bindgen_test]
+pub async fn bls_single_verify_empty_proof_test() {
+    // verify empty derived proof
+    let eqv0 = vec![];
+    let verify_proof_request = BlsVerifyProofMultiContext {
+        proof: vec![],
+        publicKey: vec![],
+        messages: vec![],
+        revealed: vec![],
+        nonce: vec![0],
+        equivs: vec![eqv0],
+    };
+    let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
+    let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
+        .await
+        .unwrap();
+    let verify_proof_result =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_proof_result_js).unwrap();
+    assert!(!verify_proof_result.verified);
 }
 
 #[allow(non_snake_case)]
