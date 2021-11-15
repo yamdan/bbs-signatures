@@ -536,7 +536,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     let mut proof_requests: Vec<ProofRequest> = Vec::with_capacity(num_of_inputs);
     let mut proofs: Vec<SignatureProof> = Vec::with_capacity(num_of_inputs);
     let mut hidden_vecs: Vec<Vec<usize>> = Vec::with_capacity(num_of_inputs);
-    for (i, (messages, revealed_vec, r_proof, dpk)) in multizip((
+    for (i, (messages, revealed_vec, count_and_proof, dpk)) in multizip((
         request.messages,
         request.revealed,
         request.proof,
@@ -544,20 +544,10 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     ))
     .enumerate()
     {
-        let (message_count, proof) = match r_proof.unwrap() {
-            Ok((m, p)) => (m, p),
-            Err(_) => {
-                return gen_verification_response(
-                    false,
-                    Some("failed to deserialize proofValue".to_string()),
-                )
-            }
-        };
-
-        let pk = dpk.to_public_key(message_count)?;
+        let pk = dpk.to_public_key(count_and_proof.message_count)?;
 
         // prepare revealed_set and hidden_vecs
-        let all_set: BTreeSet<usize> = (0..message_count).collect();
+        let all_set: BTreeSet<usize> = (0..count_and_proof.message_count).collect();
         let pre_revealed_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
         let revealed_set: BTreeSet<usize> = pre_revealed_set
             .difference(&partial_hidden_set[i])
@@ -586,7 +576,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         // prepare proofs
         let signature_proof = SignatureProof {
             revealed_messages,
-            proof,
+            proof: count_and_proof.proof,
         };
         proofs.push(signature_proof);
     }
