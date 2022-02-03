@@ -94,7 +94,8 @@ wasm_impl!(
     messages: Vec<Vec<Vec<u8>>>,
     revealed: Vec<Vec<usize>>,
     nonce: Vec<u8>,
-    equivs: Vec<Vec<(usize, usize)>>
+    equivs: Vec<Vec<(usize, usize)>>,
+    range: Vec<Vec<(usize, usize, usize)>>
 );
 
 wasm_impl!(
@@ -104,7 +105,8 @@ wasm_impl!(
     messages: Vec<Vec<Vec<u8>>>,
     revealed: Vec<Vec<usize>>,
     nonce: Vec<u8>,
-    equivs: Vec<Vec<(usize, usize)>>
+    equivs: Vec<Vec<(usize, usize)>>,
+    range: Vec<Vec<(usize, usize, usize)>>
 );
 
 /// Generate a BLS 12-381 key pair.
@@ -414,6 +416,8 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         }
     }
 
+    // TBD: generate Pedersen commitments for range proofs
+
     // (1) commit
     for (i, (r_messages, r_signature, r_revealed, r_pk)) in multizip((
         request.messages,
@@ -547,6 +551,11 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         let pk = dpk.to_public_key(count_and_proof.message_count)?;
 
         // prepare revealed_set and hidden_vecs
+        // e.g., all_set = {0, 1, 2, 3}        // there are originally four messages: m_0, m_1, m_2, m_3
+        //       pre_revealed_set = {0, 2, 3}  // candidates not to be hidden indicated by reveal indices
+        //       partial_hidden_set = {3}      // m_3 is hidden and proved to be equivallent with the other
+        //       revealed_set = {0, 2}         // revealed messages are m_0 and m_2
+        //       hidden_vecs = [1, 3]          // hidden messages are m_1 and m_3
         let all_set: BTreeSet<usize> = (0..count_and_proof.message_count).collect();
         let pre_revealed_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
         let revealed_set: BTreeSet<usize> = pre_revealed_set
@@ -557,6 +566,8 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         hidden_vecs.push(hidden_vec);
 
         // prepare revealed_messages
+        // e.g, index_map = [0, 2, 3]   // m'_0 = m_0, m'_1 = m_2, m'_2 -> m_3
+        //      revealed_messages = { "0": H(m'_0), "2": H(m'_1)}   // m_3 is hidden (its equality is proved)
         let index_map = pre_revealed_set.iter().collect::<Vec<&usize>>();
         let mut revealed_messages: BTreeMap<usize, SignatureMessage> = BTreeMap::new();
         for (m_index, m) in messages.iter().enumerate() {
