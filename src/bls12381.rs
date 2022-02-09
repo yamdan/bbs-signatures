@@ -13,7 +13,10 @@
 
 use crate::utils::set_panic_hook;
 
-use crate::{BbsVerifyResponse, PoKOfSignatureProofMultiWrapper, PoKOfSignatureProofWrapper};
+use crate::{
+    gen_signature_message, BbsVerifyResponse, GenSignatureMessageError,
+    PoKOfSignatureProofMultiWrapper, PoKOfSignatureProofWrapper,
+};
 use bbs::prelude::*;
 use pairing_plus::{
     bls12_381::{Bls12, Fr, G1, G2},
@@ -180,11 +183,11 @@ pub async fn bls_sign(request: JsValue) -> Result<JsValue, JsValue> {
     if request.keyPair.secretKey.is_none() {
         return Err(JsValue::from_str("Failed to sign"));
     }
-    let messages: Vec<SignatureMessage> = request
+    let messages = request
         .messages
         .iter()
-        .map(|m| SignatureMessage::hash(m))
-        .collect();
+        .map(|m| gen_signature_message(m))
+        .collect::<Result<Vec<_>, _>>()?;
     match Signature::new(
         messages.as_slice(),
         &request.keyPair.secretKey.unwrap(),
@@ -219,11 +222,11 @@ pub async fn bls_verify(request: JsValue) -> Result<JsValue, JsValue> {
         .unwrap());
     }
     let pk = result.publicKey.to_public_key(result.messages.len())?;
-    let messages: Vec<SignatureMessage> = result
+    let messages = result
         .messages
         .iter()
-        .map(|m| SignatureMessage::hash(m))
-        .collect();
+        .map(|m| gen_signature_message(m))
+        .collect::<Result<Vec<_>, _>>()?;
     match result.signature.verify(messages.as_slice(), &pk) {
         Err(e) => Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
             verified: false,
@@ -416,14 +419,13 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         }
     }
 
-    // TBD: generate Pedersen commitments for range proofs
-
     // (1) commit
-    for (i, (r_messages, r_signature, r_revealed, r_pk)) in multizip((
+    for (i, (r_messages, r_signature, r_revealed, r_pk, r_range)) in multizip((
         request.messages,
         request.signature,
         request.revealed,
         request.publicKey,
+        request.range,
     ))
     .enumerate()
     {
@@ -432,22 +434,49 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         }
         let pk = r_pk.to_public_key(r_messages.len())?;
         let revealed: BTreeSet<&usize> = r_revealed.iter().collect();
+
+        // for range proofs
+        // generate r's and blindings based on request.range
+        let range_rs: Vec<ProofNonce> = r_range.iter().map(|_| ProofNonce::random()).collect();
+        let range_m_blindings: Vec<ProofNonce> =
+            r_range.iter().map(|_| ProofNonce::random()).collect();
+        let range_r_blindings: Vec<ProofNonce> =
+            r_range.iter().map(|_| ProofNonce::random()).collect();
+
+        // generate Pedersen commitments for range proofs
+        let commitments = r_range
+            .iter()
+            .enumerate()
+            .map::<Result<Commitment, GenSignatureMessageError>, _>(|(i, &(range, _, _))| {
+                let v = gen_signature_message(&r_messages[range])?;
+
+                // DEBUG
+                console::log_1(&format!("v: {:?}", v).into());
+
+                let mut builder = CommitmentBuilder::new();
+                builder.add(&pk.h[0], v); // h_1^m
+                builder.add(&pk.h0, range_rs[i]); // h_0^r
+                Ok(builder.finalize()) // h_1^m * h_0^r
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
         let messages: Vec<ProofMessage> = r_messages
+            .iter()
+            .map(|m| gen_signature_message(m))
+            .collect::<Result<Vec<_>, _>>()?
             .iter()
             .enumerate()
             .map(
-                |(j, r_message)| match (revealed.contains(&j), equivs_map.get(&(i, j))) {
-                    (true, None) => ProofMessage::Revealed(SignatureMessage::hash(&r_message)),
-                    (true, Some(&k)) => ProofMessage::Hidden(HiddenMessage::ExternalBlinding(
-                        SignatureMessage::hash(&r_message),
-                        equiv_blindings[k],
-                    )),
-                    _ => ProofMessage::Hidden(HiddenMessage::ProofSpecificBlinding(
-                        SignatureMessage::hash(&r_message),
-                    )),
+                |(j, &m)| match (revealed.contains(&j), equivs_map.get(&(i, j))) {
+                    (true, None) => ProofMessage::Revealed(m),
+                    (true, Some(&k)) => {
+                        ProofMessage::Hidden(HiddenMessage::ExternalBlinding(m, equiv_blindings[k]))
+                    }
+                    _ => ProofMessage::Hidden(HiddenMessage::ProofSpecificBlinding(m)),
                 },
             )
             .collect();
+
         match PoKOfSignature::init(&r_signature, &pk, messages.as_slice()) {
             Err(e) => return Err(JsValue::from(&format!("{:?}", e))),
             Ok(pok) => {
@@ -569,13 +598,22 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         // e.g, index_map = [0, 2, 3]   // m'_0 = m_0, m'_1 = m_2, m'_2 -> m_3
         //      revealed_messages = { "0": H(m'_0), "2": H(m'_1)}   // m_3 is hidden (its equality is proved)
         let index_map = pre_revealed_set.iter().collect::<Vec<&usize>>();
-        let mut revealed_messages: BTreeMap<usize, SignatureMessage> = BTreeMap::new();
-        for (m_index, m) in messages.iter().enumerate() {
+        let revealed_messages: BTreeMap<usize, SignatureMessage> = messages
+            .iter()
+            .map(|m| gen_signature_message(m))
+            .collect::<Result<Vec<_>, _>>()?
+            .iter()
+            .enumerate()
+            .filter_map(|(m_index, &m)| {
             let m_index_orig = index_map[m_index];
             if revealed_set.contains(m_index_orig) {
-                revealed_messages.insert(*m_index_orig, SignatureMessage::hash(m.clone()));
+                    Some((*m_index_orig, m))
+                } else {
+                    None
             }
-        }
+            })
+            .collect();
+
 
         // prepare proof_requests
         let proof_request = ProofRequest {

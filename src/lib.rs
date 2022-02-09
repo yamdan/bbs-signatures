@@ -21,12 +21,22 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 extern crate arrayref;
 
 use bbs::prelude::*;
+use ff_zeroize::{PrimeField, PrimeFieldDecodingError};
+use pairing_plus::bls12_381::{Fr, FrRepr};
 use serde::{
     de::{Error as DError, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::{collections::BTreeSet, convert::TryFrom};
+use std::{
+    array::TryFromSliceError,
+    collections::BTreeSet,
+    convert::{TryFrom, TryInto},
+    error, fmt,
+};
 use wasm_bindgen::prelude::*;
+
+const U8_STRING: u8 = 0u8;
+const U8_INTEGER: u8 = 1u8;
 
 #[macro_use]
 mod macros;
@@ -230,4 +240,62 @@ pub(crate) fn bitvector_to_revealed(data: &[u8]) -> BTreeSet<usize> {
         scalar += remaining;
     }
     revealed_messages
+}
+
+#[derive(Debug, Clone)]
+enum GenSignatureMessageError {
+    EmptyMessage,
+    InvalidBitLength,
+    InvalidMessageType,
+    TryFromSliceError,
+    PrimeFieldDecodingError,
+}
+
+impl fmt::Display for GenSignatureMessageError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SignatureMessage generation error")
+    }
+}
+
+impl error::Error for GenSignatureMessageError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        None
+    }
+}
+
+impl From<TryFromSliceError> for GenSignatureMessageError {
+    fn from(_err: TryFromSliceError) -> GenSignatureMessageError {
+        GenSignatureMessageError::TryFromSliceError
+    }
+}
+
+impl From<PrimeFieldDecodingError> for GenSignatureMessageError {
+    fn from(_err: PrimeFieldDecodingError) -> GenSignatureMessageError {
+        GenSignatureMessageError::PrimeFieldDecodingError
+    }
+}
+
+impl From<GenSignatureMessageError> for JsValue {
+    fn from(_err: GenSignatureMessageError) -> Self {
+        JsValue::from_str(&format!("{}", _err))
+    }
+}
+
+fn gen_signature_message(m: &[u8]) -> Result<SignatureMessage, GenSignatureMessageError> {
+    if m.is_empty() {
+        return Err(GenSignatureMessageError::EmptyMessage);
+    }
+
+    match m[0] {
+        U8_STRING => Ok(SignatureMessage::hash(&m[1..])),
+        U8_INTEGER => {
+            if m.len() != 5 {
+                return Err(GenSignatureMessageError::InvalidBitLength);
+            };
+            let m_64 = [&[0; 4], &m[1..5]].concat(); // pad 0's to make 32-bit integer to 64-bit
+            let v = Fr::from_repr(FrRepr::from(u64::from_be_bytes(m_64[..].try_into()?)))?;
+            Ok(SignatureMessage::from(v))
+        }
+        _ => Err(GenSignatureMessageError::InvalidMessageType),
+    }
 }

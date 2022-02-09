@@ -614,6 +614,7 @@ dependencies = [
  "arrayref",
  "bbs",
  "console_error_panic_hook",
+ "ff-zeroize",
  "hkdf",
  "itertools",
  "js-sys",
