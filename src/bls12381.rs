@@ -14,10 +14,11 @@
 use crate::utils::set_panic_hook;
 
 use crate::{
-    gen_signature_message, BbsVerifyResponse, GenSignatureMessageError,
-    PoKOfSignatureProofMultiWrapper, PoKOfSignatureProofWrapper,
+    gen_signature_message, BbsVerifyResponse, PoKOfSignatureProofMultiWrapper,
+    PoKOfSignatureProofWrapper,
 };
 use bbs::prelude::*;
+use ff_zeroize::Field;
 use pairing_plus::{
     bls12_381::{Bls12, Fr, G1, G2},
     hash_to_field::BaseFromRO,
@@ -435,46 +436,71 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         let pk = r_pk.to_public_key(r_messages.len())?;
         let revealed: BTreeSet<&usize> = r_revealed.iter().collect();
 
-        // for range proofs
-        // generate r's and blindings based on request.range
-        let range_rs: Vec<ProofNonce> = r_range.iter().map(|_| ProofNonce::random()).collect();
-        let range_m_blindings: Vec<ProofNonce> =
-            r_range.iter().map(|_| ProofNonce::random()).collect();
-        let range_r_blindings: Vec<ProofNonce> =
-            r_range.iter().map(|_| ProofNonce::random()).collect();
-
-        // generate Pedersen commitments for range proofs
-        let commitments = r_range
-            .iter()
-            .enumerate()
-            .map::<Result<Commitment, GenSignatureMessageError>, _>(|(i, &(range, _, _))| {
-                let v = gen_signature_message(&r_messages[range])?;
-
-                // DEBUG
-                console::log_1(&format!("v: {:?}", v).into());
-
-                let mut builder = CommitmentBuilder::new();
-                builder.add(&pk.h[0], v); // h_1^m
-                builder.add(&pk.h0, range_rs[i]); // h_0^r
-                Ok(builder.finalize()) // h_1^m * h_0^r
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let messages: Vec<ProofMessage> = r_messages
+        let messages = r_messages
             .iter()
             .map(|m| gen_signature_message(m))
-            .collect::<Result<Vec<_>, _>>()?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // for range proofs
+        // generate Pedersen commitments and blindings for range proofs
+        let range_commitments: HashMap<usize, (Commitment, Fr, ProofNonce)> = r_range
             .iter()
             .enumerate()
-            .map(
-                |(j, &m)| match (revealed.contains(&j), equivs_map.get(&(i, j))) {
-                    (true, None) => ProofMessage::Revealed(m),
-                    (true, Some(&k)) => {
+            .map(|(i, &(range_idx, _, _))| {
+                let m = messages[range_idx];
+
+                
+
+                // commitment used to compose this proof with bulletproofs
+                let mut rng = thread_rng();
+                let r = Fr::random(&mut rng);
+                let mut builder = CommitmentBuilder::new();
+                builder.add(&pk.h[0], m); // h_1^m
+                builder.add(&pk.h0, &SignatureMessage::from(r)); // h_0^r
+                let range_commitment = builder.finalize(); // h_1^m * h_0^r
+
+                // blinding for m
+                let m_blindings = ProofNonce::random();
+
+                (range_idx, (range_commitment, r, m_blindings))
+            })
+            .collect();
+
+        let committings: Vec<(ProverCommittedG1, Vec<SignatureMessage>)> = range_commitments
+            .iter()
+            .map(|(&range_idx, (_, r, m_blinding))| {
+                let mut committing = ProverCommittingG1::new();
+                let mut secret = Vec::with_capacity(2);
+                committing.commit_with(&pk.h[0], m_blinding);
+                secret.push(messages[range_idx]);
+                committing.commit(&pk.h0);
+                secret.push(SignatureMessage::from(r));
+                (committing.finish(), secret)
+            })
+            .collect();
+
+        let messages: Vec<ProofMessage> = messages
+            .iter()
+            .enumerate()
+            .map(|(j, &m)| {
+                match (
+                    revealed.contains(&j),
+                    equivs_map.get(&(i, j)),
+                    range_commitments.get(&j),
+                ) {
+                    (true, None, None) => ProofMessage::Revealed(m),
+                    (true, Some(&k), None) => {
                         ProofMessage::Hidden(HiddenMessage::ExternalBlinding(m, equiv_blindings[k]))
                     }
+                    (true, None, Some(&(_, _, m_blindings))) => {
+                        // DEBUG
+                        console::log_1(&format!("j: {}, m_blindings: {:?}", j, m_blindings).into());
+
+                        ProofMessage::Hidden(HiddenMessage::ExternalBlinding(m, m_blindings))
+                    }
                     _ => ProofMessage::Hidden(HiddenMessage::ProofSpecificBlinding(m)),
-                },
-            )
+                }
+            })
             .collect();
 
         match PoKOfSignature::init(&r_signature, &pk, messages.as_slice()) {
