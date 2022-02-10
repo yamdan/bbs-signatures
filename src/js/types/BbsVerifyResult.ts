@@ -20,7 +20,7 @@ export interface BbsVerifyResult {
    */
   readonly verified: boolean;
   /**
-   * Messages to sign
+   * Verification error if any
    */
-  readonly error?: string;
+  readonly error?: Error;
 }
