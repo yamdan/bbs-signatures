@@ -14,11 +14,10 @@
 use crate::utils::set_panic_hook;
 
 use crate::{
-    gen_signature_message, BbsVerifyResponse, PoKOfSignatureProofMultiWrapper,
+    gen_signature_message, BbsVerifyResponse, PoKOfCommitment, PoKOfSignatureProofMultiWrapper,
     PoKOfSignatureProofWrapper,
 };
 use bbs::prelude::*;
-use ff_zeroize::Field;
 use pairing_plus::{
     bls12_381::{Bls12, Fr, G1, G2},
     hash_to_field::BaseFromRO,
@@ -406,6 +405,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     let mut poks: Vec<PoKOfSignature> = Vec::with_capacity(num_of_inputs);
     let mut message_counts: Vec<usize> = Vec::with_capacity(num_of_inputs);
+    let mut range_commitments_vec: Vec<Vec<PoKOfCommitment>> = Vec::with_capacity(num_of_inputs);
 
     // generate blindings and hashmaps based on request.equivs
     let equiv_blindings: Vec<ProofNonce> = request
@@ -442,27 +442,20 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             .collect::<Result<Vec<_>, _>>()?;
 
         // for range proofs
-        // generate Pedersen commitments and blindings for range proofs
-        let range_commitments: HashMap<usize, (Commitment, Fr, ProofNonce)> = r_range
+        // generate blindings of integer m's for range proofs
+        let blinding_ms: HashMap<usize, ProofNonce> = r_range
             .iter()
-            .enumerate()
-            .map(|(i, &(range_idx, _, _))| {
+            .map(|&(range_idx, _, _)| (range_idx, ProofNonce::random()))
+            .collect();
+        // generate Pedersen commitments for range proofs
+        let range_commitment: Vec<PoKOfCommitment> = r_range
+            .iter()
+            .map(|&(range_idx, _, _)| {
                 let m = messages[range_idx];
 
                 
-
-                // commitment used to compose this proof with bulletproofs
-                let mut rng = thread_rng();
-                let r = Fr::random(&mut rng);
-                let mut builder = CommitmentBuilder::new();
-                builder.add(&pk.h[0], m); // h_1^m
-                builder.add(&pk.h0, &SignatureMessage::from(r)); // h_0^r
-                let range_commitment = builder.finalize(); // h_1^m * h_0^r
-
-                // blinding for m
-                let m_blindings = ProofNonce::random();
-
-                (range_idx, (range_commitment, r, m_blindings))
+                let blinding_m = blinding_ms[&range_idx];
+                PoKOfCommitment::init(range_idx, &pk.h[0], &pk.h0, &m, &blinding_m)
             })
             .collect();
 
@@ -486,17 +479,14 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
                 match (
                     revealed.contains(&j),
                     equivs_map.get(&(i, j)),
-                    range_commitments.get(&j),
+                    blinding_ms.get(&j),
                 ) {
                     (true, None, None) => ProofMessage::Revealed(m),
                     (true, Some(&k), None) => {
                         ProofMessage::Hidden(HiddenMessage::ExternalBlinding(m, equiv_blindings[k]))
                     }
-                    (true, None, Some(&(_, _, m_blindings))) => {
-                        // DEBUG
-                        console::log_1(&format!("j: {}, m_blindings: {:?}", j, m_blindings).into());
-
-                        ProofMessage::Hidden(HiddenMessage::ExternalBlinding(m, m_blindings))
+                    (true, None, Some(&blinding_m)) => {
+                        ProofMessage::Hidden(HiddenMessage::ExternalBlinding(m, blinding_m))
                     }
                     _ => ProofMessage::Hidden(HiddenMessage::ProofSpecificBlinding(m)),
                 }
@@ -508,6 +498,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             Ok(pok) => {
                 poks.push(pok);
                 message_counts.push(r_messages.len());
+                range_commitments_vec.push(range_commitment);
             }
         }
     }
@@ -515,17 +506,40 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     // (2) challenge
     //     ch = H(bases_1, cmts_1, ..., bases_n, cmts_n, nonce)
     let nonce = ProofNonce::hash(&request.nonce);
-    let challenge_hash = Prover::create_challenge_hash(&poks, None, &nonce).unwrap();
+    let range_commitments_byte = range_commitments_vec
+        .iter()
+        .flat_map(|c| {
+            c.iter()
+                .flat_map(|pokc| pokc.to_bytes())
+                .collect::<Vec<u8>>()
+        })
+        .collect::<Vec<u8>>();
+
+    let challenge_hash =
+        Prover::create_challenge_hash(&poks, Some(&[&range_commitments_byte]), &nonce).unwrap();
 
     // (3) response
     let mut proofs: Vec<PoKOfSignatureProofMultiWrapper> = Vec::with_capacity(num_of_inputs);
-    for (pok, message_count) in multizip((poks, message_counts)) {
-        match pok.gen_proof(&challenge_hash) {
-            Ok(proof) => {
-                let out = PoKOfSignatureProofMultiWrapper::new(message_count, proof);
+    for (pok, message_count, range_commitments) in
+        multizip((poks, message_counts, range_commitments_vec))
+    {
+        match (
+            pok.gen_proof(&challenge_hash),
+            range_commitments
+                .into_iter()
+                .map(|pokc| pokc.gen_proof(&challenge_hash))
+                .collect(),
+        ) {
+            (Ok(proof), Ok(range_commitment_proofs)) => {
+                let out = PoKOfSignatureProofMultiWrapper::new(
+                    message_count,
+                    proof,
+                    range_commitment_proofs,
+                );
                 proofs.push(out);
             }
-            Err(e) => return Err(JsValue::from(&format!("{:?}", e))),
+            (Err(e), _) => return Err(JsValue::from(&format!("{:?}", e))),
+            (_, Err(e)) => return Err(JsValue::from(&format!("{:?}", e))),
         }
     }
 
