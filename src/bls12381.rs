@@ -103,7 +103,7 @@ wasm_impl!(
 
 wasm_impl!(
     BlsVerifyProofMultiContext,
-    proof: Vec<PoKOfSignatureProofMultiWrapper>,
+    proof: Vec<Vec<u8>>,
     publicKey: Vec<DeterministicPublicKey>,
     messages: Vec<Vec<Vec<u8>>>,
     revealed: Vec<Vec<usize>>,
@@ -543,7 +543,14 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         }
     }
 
-    Ok(serde_wasm_bindgen::to_value(&proofs).unwrap())
+    // CBOR-encodes each proof
+    let cbor_proofs: Vec<Vec<u8>> = proofs
+        .iter()
+        .map(|proof| serde_cbor::ser::to_vec_packed(proof).unwrap())
+        .collect();
+
+    // return JS-array of CBOR-encoded proofs
+    Ok(serde_wasm_bindgen::to_value(&cbor_proofs).unwrap())
 }
 
 fn gen_verification_response(verified: bool, error: Option<String>) -> Result<JsValue, JsValue> {
@@ -609,7 +616,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     let mut proof_requests: Vec<ProofRequest> = Vec::with_capacity(num_of_inputs);
     let mut proofs: Vec<SignatureProof> = Vec::with_capacity(num_of_inputs);
     let mut hidden_vecs: Vec<Vec<usize>> = Vec::with_capacity(num_of_inputs);
-    for (i, (messages, revealed_vec, count_and_proof, dpk)) in multizip((
+    for (i, (messages, revealed_vec, cbor_proof, dpk)) in multizip((
         request.messages,
         request.revealed,
         request.proof,
@@ -617,6 +624,10 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     ))
     .enumerate()
     {
+        // decode CBOR
+        let count_and_proof: PoKOfSignatureProofMultiWrapper =
+            serde_cbor::from_slice(&cbor_proof).unwrap();
+
         let pk = dpk.to_public_key(count_and_proof.message_count)?;
 
         // prepare revealed_set and hidden_vecs

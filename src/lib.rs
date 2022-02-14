@@ -53,7 +53,7 @@ pub struct PoKOfSignatureProofWrapper {
     pub proof: PoKOfSignatureProof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PoKOfSignatureProofMultiWrapper {
     pub message_count: usize,
     pub proof: PoKOfSignatureProof,
@@ -147,63 +147,6 @@ impl PoKOfSignatureProofMultiWrapper {
             proof,
             range_commitment_proofs,
         }
-    }
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut data = (self.message_count as u16).to_be_bytes().to_vec();
-        data.append(&mut self.proof.to_bytes_compressed_form());
-        data
-    }
-}
-
-impl TryFrom<&[u8]> for PoKOfSignatureProofMultiWrapper {
-    type Error = JsValue;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        if value.len() < 2 {
-            return Err(JsValue::FALSE);
-        }
-        let message_count = u16::from_be_bytes(*array_ref![value, 0, 2]) as usize;
-        let proof = map_err!(PoKOfSignatureProof::try_from(&value[2..]))?;
-        Ok(Self {
-            message_count,
-            proof,
-        })
-    }
-}
-
-impl Serialize for PoKOfSignatureProofMultiWrapper {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_bytes(&self.to_bytes().as_slice())
-    }
-}
-
-impl<'a> Deserialize<'a> for PoKOfSignatureProofMultiWrapper {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
-        struct DeserializeVisitor;
-
-        impl<'a> Visitor<'a> for DeserializeVisitor {
-            type Value = PoKOfSignatureProofMultiWrapper;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("expected byte array")
-            }
-
-            fn visit_bytes<E>(self, value: &[u8]) -> Result<PoKOfSignatureProofMultiWrapper, E>
-            where
-                E: DError,
-            {
-                PoKOfSignatureProofMultiWrapper::try_from(value)
-                    .map_err(|_| DError::invalid_value(serde::de::Unexpected::Bytes(value), &self))
-            }
-        }
-
-        deserializer.deserialize_bytes(DeserializeVisitor)
     }
 }
 
@@ -324,7 +267,7 @@ pub struct PoKOfCommitment {
 /// The actual proof that is sent from prover to verifier.
 ///
 /// Contains the proof of knowledge of a committed value and its opening.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PoKOfCommitmentProof {
     /// index i
     i: usize,
