@@ -45,9 +45,8 @@ dependencies = [
 
 [[package]]
 name = "bbs"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e24ff98879bedb7fe7b3ce0c86268baca8468e8ce405d44459dbaf0b26ac9ca"
+version = "0.4.2"
+source = "git+https://github.com/yamdan/ursa?branch=bbs-rangeproof#159512111969d4f6e02ac29b66ddc7740940f129"
 dependencies = [
  "arrayref",
  "blake2",
@@ -59,6 +58,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde-wasm-bindgen",
+ "subtle 2.4.1",
  "wasm-bindgen",
  "zeroize",
 ]
@@ -143,7 +143,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4434400df11d95d556bac068ddfedd482915eb18fe8bea89bc80b6e4b1c179e5"
 dependencies = [
  "generic-array",
- "subtle",
+ "subtle 1.0.0",
 ]
 
 [[package]]
@@ -581,6 +581,12 @@ name = "subtle"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d67a5a62ba6e01cb2192ff309324cb4875d0c451d55fe2319433abe7a05a8ee"
+
+[[package]]
+name = "subtle"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "syn"

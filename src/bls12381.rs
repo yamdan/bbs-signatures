@@ -14,7 +14,7 @@
 use crate::utils::set_panic_hook;
 
 use crate::{
-    gen_signature_message, BbsVerifyResponse, PoKOfCommitment, PoKOfSignatureProofMultiWrapper,
+    gen_signature_message, BbsVerifyResponse, PoKOfSignatureProofMultiWrapper,
     PoKOfSignatureProofWrapper,
 };
 use bbs::prelude::*;
@@ -154,7 +154,7 @@ pub async fn bls_to_bbs_key(request: JsValue) -> Result<JsValue, JsValue> {
         };
         Ok(serde_wasm_bindgen::to_value(&key_pair).unwrap())
     } else if let Some(s) = request.keyPair.secretKey {
-        let (dpk, sk) = DeterministicPublicKey::new(Some(KeyGenOption::FromSecretKey(s)));
+        let (dpk, sk) = DeterministicPublicKey::new(Some(KeyGenOption::FromSecretKey(s))).unwrap();
         let pk = dpk.to_public_key(request.messageCount)?;
         let key_pair = BbsKeyPair {
             publicKey: pk,
@@ -459,19 +459,6 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             })
             .collect();
 
-        let committings: Vec<(ProverCommittedG1, Vec<SignatureMessage>)> = range_commitments
-            .iter()
-            .map(|(&range_idx, (_, r, m_blinding))| {
-                let mut committing = ProverCommittingG1::new();
-                let mut secret = Vec::with_capacity(2);
-                committing.commit_with(&pk.h[0], m_blinding);
-                secret.push(messages[range_idx]);
-                committing.commit(&pk.h0);
-                secret.push(SignatureMessage::from(r));
-                (committing.finish(), secret)
-            })
-            .collect();
-
         let messages: Vec<ProofMessage> = messages
             .iter()
             .enumerate()
@@ -510,7 +497,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         .iter()
         .flat_map(|c| {
             c.iter()
-                .flat_map(|pokc| pokc.to_bytes())
+                .flat_map(|pokoc| pokoc.to_bytes())
                 .collect::<Vec<u8>>()
         })
         .collect::<Vec<u8>>();
@@ -527,7 +514,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             pok.gen_proof(&challenge_hash),
             range_commitments
                 .into_iter()
-                .map(|pokc| pokc.gen_proof(&challenge_hash))
+                .map(|pokoc| pokoc.gen_proof(&challenge_hash))
                 .collect(),
         ) {
             (Ok(proof), Ok(range_commitment_proofs)) => {
@@ -616,6 +603,8 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     let mut proof_requests: Vec<ProofRequest> = Vec::with_capacity(num_of_inputs);
     let mut proofs: Vec<SignatureProof> = Vec::with_capacity(num_of_inputs);
     let mut hidden_vecs: Vec<Vec<usize>> = Vec::with_capacity(num_of_inputs);
+    let mut range_commitments_vec: Vec<(Vec<PoKOfCommitmentProof>, PublicKey)> =
+        Vec::with_capacity(num_of_inputs);
     for (i, (messages, revealed_vec, cbor_proof, dpk)) in multizip((
         request.messages,
         request.revealed,
@@ -630,16 +619,28 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
         let pk = dpk.to_public_key(count_and_proof.message_count)?;
 
+        // for range proofs
+        let range_commitment_proofs = count_and_proof.range_commitment_proofs;
+        let range_index_set: BTreeSet<usize> =
+            range_commitment_proofs.iter().map(|p| p.i).collect();
+        range_commitments_vec.push((range_commitment_proofs, pk.clone()));
+
         // prepare revealed_set and hidden_vecs
-        // e.g., all_set = {0, 1, 2, 3}        // there are originally four messages: m_0, m_1, m_2, m_3
-        //       pre_revealed_set = {0, 2, 3}  // candidates not to be hidden indicated by reveal indices
-        //       partial_hidden_set = {3}      // m_3 is hidden and proved to be equivallent with the other
-        //       revealed_set = {0, 2}         // revealed messages are m_0 and m_2
-        //       hidden_vecs = [1, 3]          // hidden messages are m_1 and m_3
+        // e.g., all_set = {0, 1, 2, 3, 4}        // there are originally four messages: m_0, m_1, m_2, m_3, m_4
+        //       pre_revealed_set = {0, 2, 3, 4}  // candidates not to be hidden indicated by reveal indices
+        //       partial_hidden_set = {3}         // m_3 is hidden and proved to be equivallent with the other
+        //       range_index_set = {4}            // m_4 is hidden and proved its range
+        //       revealed_set = {0, 2}            // revealed messages are m_0 and m_2
+        //       hidden_vecs = [1, 3, 4]          // hidden messages are m_1, m_3, and m_4
         let all_set: BTreeSet<usize> = (0..count_and_proof.message_count).collect();
         let pre_revealed_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
         let revealed_set: BTreeSet<usize> = pre_revealed_set
-            .difference(&partial_hidden_set[i])
+            .difference(
+                &partial_hidden_set[i]
+                    .union(&range_index_set)
+                    .cloned()
+                    .collect(),
+            )
             .cloned()
             .collect();
         let hidden_vec: Vec<usize> = all_set.difference(&revealed_set).cloned().collect();
@@ -714,8 +715,23 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     }
 
     // (2) challenge hashing
-    let challenge =
-        Verifier::create_challenge_hash(&proofs, &proof_requests, &nonce, None).unwrap();
+    let range_commitments_byte = range_commitments_vec
+        .iter()
+        .flat_map(|(c, pk)| {
+            c.iter()
+                .flat_map(|pokoc| pokoc.get_bytes_for_challenge(&pk.h[0], &pk.h0))
+                .collect::<Vec<u8>>()
+        })
+        .collect::<Vec<u8>>();
+
+    let challenge = Verifier::create_challenge_hash(
+        &proofs,
+        &proof_requests,
+        &nonce,
+        Some(&[&range_commitments_byte]),
+    )
+    .unwrap();
+
 
     // (3) verify
     let results: Vec<Result<Vec<SignatureMessage>, BBSError>> = proofs
