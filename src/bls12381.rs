@@ -616,14 +616,13 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         // decode CBOR
         let count_and_proof: PoKOfSignatureProofMultiWrapper =
             serde_cbor::from_slice(&cbor_proof).unwrap();
-
+        let proof = count_and_proof.proof;
+        let range_commitment_proofs = count_and_proof.range_commitment_proofs;
         let pk = dpk.to_public_key(count_and_proof.message_count)?;
 
-        // for range proofs
-        let range_commitment_proofs = count_and_proof.range_commitment_proofs;
+        // indices of the range-proved messages
         let range_index_set: BTreeSet<usize> =
             range_commitment_proofs.iter().map(|p| p.i).collect();
-        range_commitments_vec.push((range_commitment_proofs, pk.clone()));
 
         // prepare revealed_set and hidden_vecs
         // e.g., all_set = {0, 1, 2, 3, 4}        // there are originally four messages: m_0, m_1, m_2, m_3, m_4
@@ -631,7 +630,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         //       partial_hidden_set = {3}         // m_3 is hidden and proved to be equivallent with the other
         //       range_index_set = {4}            // m_4 is hidden and proved its range
         //       revealed_set = {0, 2}            // revealed messages are m_0 and m_2
-        //       hidden_vecs = [1, 3, 4]          // hidden messages are m_1, m_3, and m_4
+        //       hidden_vec = [1, 3, 4]           // hidden messages are m_1, m_3, and m_4
         let all_set: BTreeSet<usize> = (0..count_and_proof.message_count).collect();
         let pre_revealed_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
         let revealed_set: BTreeSet<usize> = pre_revealed_set
@@ -644,7 +643,32 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             .cloned()
             .collect();
         let hidden_vec: Vec<usize> = all_set.difference(&revealed_set).cloned().collect();
+
+        // for range proofs
+        // check the equality of the hidden message in BBS+ proof and the commited value for range proofs
+        if range_commitment_proofs
+            .iter()
+            .map(|p| {
+                let resp_in_cmt = p.get_resp_for_message();
+                let resp_in_proof =
+                    proof.get_resp_for_message(hidden_vec.iter().position(|x| *x == p.i).unwrap());
+
+                match (resp_in_cmt, resp_in_proof) {
+                    (Ok(rc), Ok(rp)) => rc == rp,
+                    _ => false,
+                }
+            })
+            .any(|b| !b)
+        {
+            return gen_verification_response(
+                false,
+                Some("invalid commitment for range proofs".to_string()),
+            );
+        }
+
+        // store for challenge hash computation later
         hidden_vecs.push(hidden_vec);
+        range_commitments_vec.push((range_commitment_proofs, pk.clone()));
 
         // prepare revealed_messages
         // e.g, index_map = [0, 2, 3]   // m'_0 = m_0, m'_1 = m_2, m'_2 -> m_3
@@ -677,7 +701,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         // prepare proofs
         let signature_proof = SignatureProof {
             revealed_messages,
-            proof: count_and_proof.proof,
+            proof,
         };
         proofs.push(signature_proof);
     }
@@ -753,7 +777,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         })
         .collect();
 
-    let error_msg = results
+    let error_msg_sig = results
         .iter()
         .map(|r| match r {
             Ok(_) => "".to_string(),
@@ -761,6 +785,23 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         })
         .collect::<String>();
 
+    let results_range: Vec<Result<PoKOfCommitmentProofStatus, BBSError>> = range_commitments_vec
+        .iter()
+        .flat_map(|(cs, pk)| {
+            cs.iter()
+                .map(move |c| c.verify(&[pk.h[0], pk.h0], &challenge))
+        })
+        .collect();
+
+    let error_msg_range = results_range
+        .iter()
+        .map(|r| match r {
+            Ok(_) => "".to_string(),
+            Err(e) => e.to_string(),
+        })
+        .collect::<String>();
+
+    let error_msg = format!("{}{}", error_msg_sig, error_msg_range);
     if error_msg.is_empty() {
         gen_verification_response(true, None)
     } else {
