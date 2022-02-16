@@ -20,7 +20,20 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[macro_use]
 extern crate arrayref;
 
+use amcl_wrapper::group_elem_g1::{G1Vector as AMCLG1Vector, G1 as AMCLG1};
+use amcl_wrapper::{
+    field_elem::FieldElement,
+    group_elem::GroupElement,
+    ECCurve::{big::BIG, ecp::ECP},
+};
 use bbs::prelude::*;
+use bulletproofs_amcl::{
+    r1cs::{
+        gadgets::bound_check::{gen_proof_of_bounded_num, verify_proof_of_bounded_num},
+        R1CSProof,
+    },
+    utils::get_generators,
+};
 use ff_zeroize::{PrimeField, PrimeFieldDecodingError};
 use pairing_plus::{
     bls12_381::{Fq, FqRepr, Fr, FrRepr, G1},
@@ -37,20 +50,6 @@ use std::{
     error, fmt,
 };
 use wasm_bindgen::prelude::*;
-
-use amcl_wrapper::group_elem_g1::{G1Vector as AMCLG1Vector, G1 as AMCLG1};
-use amcl_wrapper::{
-    field_elem::FieldElement,
-    group_elem::GroupElement,
-    ECCurve::{big::BIG, ecp::ECP},
-};
-use bulletproofs_amcl::{
-    r1cs::{
-        gadgets::bound_check::{gen_proof_of_bounded_num, verify_proof_of_bounded_num},
-        R1CSProof,
-    },
-    utils::get_generators,
-};
 
 const U8_STRING: u8 = 0u8;
 const U8_INTEGER: u8 = 1u8;
@@ -74,6 +73,7 @@ pub struct PoKOfSignatureProofMultiWrapper {
     pub message_count: usize,
     pub proof: PoKOfSignatureProof,
     pub range_commitment_proofs: Vec<PoKOfCommitmentProof>,
+    pub bulletproofs: Vec<(R1CSProof, Vec<AMCLG1>)>,
 }
 
 impl PoKOfSignatureProofWrapper {
@@ -157,11 +157,13 @@ impl PoKOfSignatureProofMultiWrapper {
         message_count: usize,
         proof: PoKOfSignatureProof,
         range_commitment_proofs: Vec<PoKOfCommitmentProof>,
+        bulletproofs: Vec<(R1CSProof, Vec<AMCLG1>)>,
     ) -> Self {
         Self {
             message_count,
             proof,
             range_commitment_proofs,
+            bulletproofs,
         }
     }
 }
@@ -273,12 +275,25 @@ enum GenRangeProofError {
     InvalidCommitment,
 }
 
+impl fmt::Display for GenRangeProofError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                GenRangeProofError::ValOverflow => "val should be integer between 0 and 2^32",
+                GenRangeProofError::InvalidProof => "invalid proof",
+                GenRangeProofError::InvalidCommitment => "invalid commitment",
+            }
+        )
+    }
+}
+
 fn gen_rangeproof(
     val: &Fr,
     blinding: &Fr,
     lower: u64,
     upper: u64,
-    max_bits_in_val: usize,
     g: &G1,
     h: &G1,
     c: &G1,
@@ -299,8 +314,10 @@ fn gen_rangeproof(
     let g = pp_g1_to_amcl_g1(g);
     let h = pp_g1_to_amcl_g1(h);
 
-    // generated commitment
+    // given commitment
     let c = pp_g1_to_amcl_g1(c);
+
+    let max_bits_in_val: usize = (64 - (upper - lower).leading_zeros()).try_into().unwrap();
 
     match gen_proof_of_bounded_num(
         val,

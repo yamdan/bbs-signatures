@@ -17,7 +17,9 @@ use crate::{
     gen_rangeproof, gen_signature_message, BbsVerifyResponse, PoKOfSignatureProofMultiWrapper,
     PoKOfSignatureProofWrapper,
 };
+use amcl_wrapper::group_elem_g1::G1 as AMCLG1;
 use bbs::prelude::*;
+use bulletproofs_amcl::r1cs::R1CSProof;
 use pairing_plus::{
     bls12_381::{Bls12, Fr, G1, G2},
     hash_to_field::BaseFromRO,
@@ -406,6 +408,8 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     let mut poks: Vec<PoKOfSignature> = Vec::with_capacity(num_of_inputs);
     let mut message_counts: Vec<usize> = Vec::with_capacity(num_of_inputs);
     let mut range_commitments_vec: Vec<Vec<PoKOfCommitment>> = Vec::with_capacity(num_of_inputs);
+    let mut bulletproofs_vec: Vec<Vec<(R1CSProof, Vec<AMCLG1>)>> =
+        Vec::with_capacity(num_of_inputs);
 
     // generate blindings and hashmaps based on request.equivs
     let equiv_blindings: Vec<ProofNonce> = request
@@ -465,7 +469,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             .collect();
         let cs: Vec<_> = range_commitment.iter().map(|c| c.c).collect();
         // generate bulletproofs
-        let bulletproofs: Result<Vec<_>, _> = r_range
+        let bulletproofs = match r_range
             .iter()
             .zip(cs)
             .map(|(&(range_idx, min, max), c)| {
@@ -478,13 +482,21 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
                     r.as_ref(),
                     min,
                     max,
-                    32,
                     pk.h[0].as_ref(),
                     pk.h0.as_ref(),
                     c.as_ref(),
                 )
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()
+        {
+            Ok(p) => p,
+            Err(e) => {
+                return Err(JsValue::from(format!(
+                    "failed to create bulletproofs: {}",
+                    e
+                )))
+            }
+        };
 
         let messages: Vec<ProofMessage> = messages
             .iter()
@@ -513,6 +525,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
                 poks.push(pok);
                 message_counts.push(r_messages.len());
                 range_commitments_vec.push(range_commitment);
+                bulletproofs_vec.push(bulletproofs);
             }
         }
     }
@@ -534,8 +547,8 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     // (3) response
     let mut proofs: Vec<PoKOfSignatureProofMultiWrapper> = Vec::with_capacity(num_of_inputs);
-    for (pok, message_count, range_commitments) in
-        multizip((poks, message_counts, range_commitments_vec))
+    for (pok, message_count, range_commitments, bulletproofs) in
+        multizip((poks, message_counts, range_commitments_vec, bulletproofs_vec))
     {
         match (
             pok.gen_proof(&challenge_hash),
@@ -549,6 +562,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
                     message_count,
                     proof,
                     range_commitment_proofs,
+                    bulletproofs,
                 );
                 proofs.push(out);
             }
