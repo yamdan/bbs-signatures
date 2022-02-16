@@ -14,7 +14,7 @@
 use crate::utils::set_panic_hook;
 
 use crate::{
-    gen_signature_message, BbsVerifyResponse, PoKOfSignatureProofMultiWrapper,
+    gen_rangeproof, gen_signature_message, BbsVerifyResponse, PoKOfSignatureProofMultiWrapper,
     PoKOfSignatureProofWrapper,
 };
 use bbs::prelude::*;
@@ -447,6 +447,10 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             .iter()
             .map(|&(range_idx, _, _)| (range_idx, ProofNonce::random()))
             .collect();
+        let rs: HashMap<usize, ProofNonce> = r_range
+            .iter()
+            .map(|&(range_idx, _, _)| (range_idx, ProofNonce::random()))
+            .collect();
         // generate Pedersen commitments for range proofs
         let range_commitment: Vec<PoKOfCommitment> = r_range
             .iter()
@@ -455,7 +459,30 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
                 
                 let blinding_m = blinding_ms[&range_idx];
-                PoKOfCommitment::init(range_idx, &pk.h[0], &pk.h0, &m, &blinding_m)
+                let r = rs[&range_idx];
+                PoKOfCommitment::init(range_idx, &pk.h[0], &pk.h0, &m, &blinding_m, &r)
+            })
+            .collect();
+        let cs: Vec<_> = range_commitment.iter().map(|c| c.c).collect();
+        // generate bulletproofs
+        let bulletproofs: Result<Vec<_>, _> = r_range
+            .iter()
+            .zip(cs)
+            .map(|(&(range_idx, min, max), c)| {
+                let m = messages[range_idx];
+                let r = rs[&range_idx];
+                let min: u64 = min.try_into().unwrap();
+                let max: u64 = max.try_into().unwrap();
+                gen_rangeproof(
+                    m.as_ref(),
+                    r.as_ref(),
+                    min,
+                    max,
+                    32,
+                    pk.h[0].as_ref(),
+                    pk.h0.as_ref(),
+                    c.as_ref(),
+                )
             })
             .collect();
 
