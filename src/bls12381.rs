@@ -14,8 +14,8 @@
 use crate::utils::set_panic_hook;
 
 use crate::{
-    gen_rangeproof, gen_signature_message, BbsVerifyResponse, PoKOfSignatureProofMultiWrapper,
-    PoKOfSignatureProofWrapper,
+    gen_rangeproof, gen_signature_message, verify_rangeproof, BbsVerifyResponse,
+    PoKOfSignatureProofMultiWrapper, PoKOfSignatureProofWrapper,
 };
 use amcl_wrapper::group_elem_g1::G1 as AMCLG1;
 use bbs::prelude::*;
@@ -36,7 +36,7 @@ use std::{
 };
 use wasm_bindgen::prelude::*;
 
-use itertools::multizip;
+use itertools::{multizip};
 
 wasm_impl!(
     /// Convenience struct for interfacing with JS.
@@ -547,9 +547,12 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     // (3) response
     let mut proofs: Vec<PoKOfSignatureProofMultiWrapper> = Vec::with_capacity(num_of_inputs);
-    for (pok, message_count, range_commitments, bulletproofs) in
-        multizip((poks, message_counts, range_commitments_vec, bulletproofs_vec))
-    {
+    for (pok, message_count, range_commitments, bulletproofs) in multizip((
+        poks,
+        message_counts,
+        range_commitments_vec,
+        bulletproofs_vec,
+    )) {
         match (
             pok.gen_proof(&challenge_hash),
             range_commitments
@@ -602,6 +605,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         request.proof.len(),
         request.revealed.len(),
         request.publicKey.len(),
+        request.range.len(),
     ]
     .iter()
     .any(|&x| x != num_of_inputs)
@@ -609,7 +613,8 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         return gen_verification_response(
             false,
             Some(
-                "numbers of messages, proof, revealed, and publicKey must be the same".to_string(),
+                "lengths of messages, proof, revealed, publicKey, and range must be the same"
+                    .to_string(),
             ),
         );
     }
@@ -617,7 +622,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         return gen_verification_response(
             false,
             Some(
-                "at least one tuple of messages, proof, revealed, and publicKey must be given"
+                "at least one tuple of messages, proof, revealed, publicKey, and range must be given"
                     .to_string(),
             ),
         );
@@ -646,11 +651,12 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     let mut hidden_vecs: Vec<Vec<usize>> = Vec::with_capacity(num_of_inputs);
     let mut range_commitments_vec: Vec<(Vec<PoKOfCommitmentProof>, PublicKey)> =
         Vec::with_capacity(num_of_inputs);
-    for (i, (messages, revealed_vec, cbor_proof, dpk)) in multizip((
+    for (i, (messages, revealed_vec, cbor_proof, dpk, range)) in multizip((
         request.messages,
         request.revealed,
         request.proof,
         request.publicKey,
+        request.range,
     ))
     .enumerate()
     {
@@ -659,11 +665,20 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             serde_cbor::from_slice(&cbor_proof).unwrap();
         let proof = count_and_proof.proof;
         let range_commitment_proofs = count_and_proof.range_commitment_proofs;
+        let bulletproofs = count_and_proof.bulletproofs;
         let pk = dpk.to_public_key(count_and_proof.message_count)?;
 
         // indices of the range-proved messages
         let range_index_set: BTreeSet<usize> =
             range_commitment_proofs.iter().map(|p| p.i).collect();
+        let range_map: BTreeMap<_, _> =
+            range.iter().map(|&(i, min, max)| (i, (min, max))).collect();
+        if range_index_set != range_map.keys().cloned().collect::<BTreeSet<usize>>() {
+            return gen_verification_response(
+                false,
+                Some("invalid indicies of range proofs".to_string()),
+            );
+        }
 
         // prepare revealed_set and hidden_vecs
         // e.g., all_set = {0, 1, 2, 3, 4}        // there are originally four messages: m_0, m_1, m_2, m_3, m_4
@@ -705,6 +720,32 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
                 false,
                 Some("invalid commitment for range proofs".to_string()),
             );
+        }
+        // bulletproofs verification
+        if range_commitment_proofs
+            .iter()
+            .zip(bulletproofs)
+            .map(|(p, (bp, c))| {
+                let (min, max) = range_map.get(&p.i).unwrap();
+                let min: u64 = (*min).try_into().unwrap();
+                let max: u64 = (*max).try_into().unwrap();
+
+                let v = verify_rangeproof(
+                    bp,
+                    c,
+                    min,
+                    max,
+                    pk.h[0].as_ref(),
+                    pk.h0.as_ref(),
+                    p.c.as_ref(),
+                );
+
+                v
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .is_err()
+        {
+            return gen_verification_response(false, Some("invalid bulletproofs".to_string()));
         }
 
         // store for challenge hash computation later

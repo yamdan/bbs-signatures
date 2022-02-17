@@ -289,6 +289,25 @@ impl fmt::Display for GenRangeProofError {
     }
 }
 
+#[derive(Debug, Clone)]
+enum VerifyRangeProofError {
+    VerificationError,
+    InvalidCommitment,
+}
+
+impl fmt::Display for VerifyRangeProofError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                VerifyRangeProofError::VerificationError => "verification error of bulletproofs",
+                VerifyRangeProofError::InvalidCommitment => "invalid commitment",
+            }
+        )
+    }
+}
+
 fn gen_rangeproof(
     val: &Fr,
     blinding: &Fr,
@@ -298,10 +317,13 @@ fn gen_rangeproof(
     h: &G1,
     c: &G1,
 ) -> Result<(R1CSProof, Vec<AMCLG1>), GenRangeProofError> {
-    // TBD
+    // TODO: replace with more appropriate label
     let transcript_label = b"BbsTermwiseSignature2021RangeProof";
+    // TODO: should be given as global parameters or issuer-specific public keys
     let G: AMCLG1Vector = get_generators("G", 128).into();
     let H: AMCLG1Vector = get_generators("H", 128).into();
+
+    let max_bits_in_val: usize = (64 - (upper - lower).leading_zeros()).try_into().unwrap();
 
     let val_repr = val.into_repr();
     let val_ref = val_repr.as_ref();
@@ -316,8 +338,6 @@ fn gen_rangeproof(
 
     // given commitment
     let c = pp_g1_to_amcl_g1(c);
-
-    let max_bits_in_val: usize = (64 - (upper - lower).leading_zeros()).try_into().unwrap();
 
     match gen_proof_of_bounded_num(
         val,
@@ -340,6 +360,49 @@ fn gen_rangeproof(
             }
         }
         _ => Err(GenRangeProofError::InvalidProof),
+    }
+}
+
+fn verify_rangeproof(
+    proof: R1CSProof,
+    commitments: Vec<AMCLG1>,
+    lower: u64,
+    upper: u64,
+    g: &G1,
+    h: &G1,
+    c: &G1,
+) -> Result<(), VerifyRangeProofError> {
+    // TODO: replace with more appropriate label
+    let transcript_label = b"BbsTermwiseSignature2021RangeProof";
+    // TODO: should be given as global parameters or issuer-specific public keys
+    let G: AMCLG1Vector = get_generators("G", 128).into();
+    let H: AMCLG1Vector = get_generators("H", 128).into();
+    
+    let max_bits_in_val: usize = (64 - (upper - lower).leading_zeros()).try_into().unwrap();
+
+    let g = pp_g1_to_amcl_g1(g);
+    let h = pp_g1_to_amcl_g1(h);
+
+    // given commitment
+    let c = pp_g1_to_amcl_g1(c);
+    if c != commitments[0] {
+        return Err(VerifyRangeProofError::InvalidCommitment);
+    }
+
+    match verify_proof_of_bounded_num(
+        lower,
+        upper,
+        max_bits_in_val,
+        proof,
+        commitments,
+        transcript_label,
+        &g,
+        &h,
+        &G,
+        &H,
+    ) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(VerifyRangeProofError::VerificationError),
     }
 }
 
