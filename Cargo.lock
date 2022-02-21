@@ -19,15 +19,15 @@ checksum = "ee2a4ec343196209d6594e19543ae87a39f96d5534d7174822a3ad825dd6ed7e"
 
 [[package]]
 name = "amcl_wrapper"
-version = "0.3.5"
-source = "git+https://github.com/ye-code/amcl_rust_wrapper.git?branch=feature-wasm#6b1523dc1147d8bd0adbef2817214de050d5e1e6"
+version = "0.4.0"
+source = "git+https://github.com/yamdan/amcl_rust_wrapper.git#4cf8e9d2e46ed73b84cfbbf9c6ecf439122bce0f"
 dependencies = [
  "byteorder",
  "lazy_static",
- "miracl_amcl",
+ "miracl_core",
  "rand 0.7.3",
  "serde",
- "serde_derive",
+ "serde_bytes",
  "serde_json",
  "sha3",
  "subtle-encoding",
@@ -74,7 +74,7 @@ dependencies = [
 [[package]]
 name = "bbs"
 version = "0.4.2"
-source = "git+https://github.com/yamdan/ursa?branch=bbs-rangeproof#159512111969d4f6e02ac29b66ddc7740940f129"
+source = "git+https://github.com/yamdan/ursa?branch=bbs-rangeproof#7086b3a5a1b5393070c428b57595a8f83015e620"
 dependencies = [
  "arrayref",
  "blake2",
@@ -145,7 +145,7 @@ dependencies = [
 [[package]]
 name = "bulletproofs_amcl"
 version = "0.2.0"
-source = "git+https://github.com/ye-code/ursa.git?branch=rangeproof#db01eae6d4f55c568c1d40ec19ce0a9d4f575519"
+source = "git+https://github.com/yamdan/ursa?branch=bbs-rangeproof#7086b3a5a1b5393070c428b57595a8f83015e620"
 dependencies = [
  "amcl_wrapper",
  "byteorder",
@@ -582,10 +582,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "miracl_amcl"
-version = "3.2.5"
+name = "miracl_core"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89d10a1ea3ffe41d318ccd9f21a1f2366c8103b95e1deaa9449793f4b10cefe8"
+checksum = "f504edf443799f955fa25d7f87ed6cea8b9093dfbaaee5459803ccdbd7696401"
 
 [[package]]
 name = "num-bigint"
@@ -912,6 +912,15 @@ dependencies = [
  "js-sys",
  "serde",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16ae07dd2f88a366f15bd0632ba725227018c69a1c8550a927324f8eb8368bb9"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

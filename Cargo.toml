@@ -17,7 +17,7 @@ default = ["wee_alloc"]
 [dependencies]
 arrayref = "0.3"
 bbs = { git = "https://github.com/yamdan/ursa", branch="bbs-rangeproof", default-features = false, features = ["wasm"] }
-bulletproofs_amcl = { git = "https://github.com/ye-code/ursa.git", branch = "rangeproof", version = "0.2.0" }
+bulletproofs_amcl = { git = "https://github.com/yamdan/ursa", branch = "bbs-rangeproof" }
 console_error_panic_hook = { version = "0.1.1", optional = true }
 ff-zeroize = "0.6"
 hkdf = "0.8"
@@ -35,9 +35,7 @@ web-sys = { version = "0.3.39", features = ['console'] }
 wee_alloc = { version = "0.4.2", optional = true }
 
 [dependencies.amcl_wrapper]
-git = "https://github.com/ye-code/amcl_rust_wrapper.git"
-branch = "feature-wasm"
-version = "0.3.5"
+git = "https://github.com/yamdan/amcl_rust_wrapper.git"
 default-features = false
 features = ["bls381", "wasm"]
 
