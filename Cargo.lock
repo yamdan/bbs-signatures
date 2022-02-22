@@ -20,7 +20,7 @@ checksum = "ee2a4ec343196209d6594e19543ae87a39f96d5534d7174822a3ad825dd6ed7e"
 [[package]]
 name = "amcl_wrapper"
 version = "0.4.0"
-source = "git+https://github.com/yamdan/amcl_rust_wrapper.git#4cf8e9d2e46ed73b84cfbbf9c6ecf439122bce0f"
+source = "git+https://github.com/yamdan/amcl_rust_wrapper.git#e8c7b6b266b872d03ed5a00b702ba3041156571c"
 dependencies = [
  "byteorder",
  "lazy_static",
@@ -74,7 +74,7 @@ dependencies = [
 [[package]]
 name = "bbs"
 version = "0.4.2"
-source = "git+https://github.com/yamdan/ursa?branch=bbs-rangeproof#7086b3a5a1b5393070c428b57595a8f83015e620"
+source = "git+https://github.com/yamdan/ursa?branch=bbs-rangeproof#d36f3e523b7c76725c36554540448b08a5d9d3e1"
 dependencies = [
  "arrayref",
  "blake2",
@@ -145,14 +145,16 @@ dependencies = [
 [[package]]
 name = "bulletproofs_amcl"
 version = "0.2.0"
-source = "git+https://github.com/yamdan/ursa?branch=bbs-rangeproof#7086b3a5a1b5393070c428b57595a8f83015e620"
+source = "git+https://github.com/yamdan/ursa?branch=bbs-rangeproof#d36f3e523b7c76725c36554540448b08a5d9d3e1"
 dependencies = [
  "amcl_wrapper",
  "byteorder",
  "criterion",
  "failure",
+ "ff-zeroize",
  "lazy_static",
  "merlin",
+ "pairing-plus",
  "rand 0.7.3",
  "serde",
  "serde_derive",
@@ -1082,7 +1084,6 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 name = "wasm"
 version = "0.1.0"
 dependencies = [
- "amcl_wrapper",
  "arrayref",
  "bbs",
  "bulletproofs_amcl",

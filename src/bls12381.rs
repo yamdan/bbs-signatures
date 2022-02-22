@@ -15,7 +15,7 @@ use crate::utils::set_panic_hook;
 
 use crate::{
     gen_commitments_and_rangeproof, gen_signature_message, verify_commitments_and_rangeproof,
-    BbsVerifyResponse, Bulletproof, GenRangeProofError, PoKOfSignatureProofMultiWrapper,
+    BbsVerifyResponse, Bulletproof, GenRangeProofErrorWrapper, PoKOfSignatureProofMultiWrapper,
     PoKOfSignatureProofWrapper,
 };
 use bbs::prelude::*;
@@ -457,7 +457,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
                 let blinding_m = blinding_ms[&range_idx];
                 gen_commitments_and_rangeproof(range_idx, min, max, &m, &blinding_m, &pk)
             })
-            .collect::<Result<Vec<(PoKOfCommitment, Bulletproof)>, GenRangeProofError>>()?;
+            .collect::<Result<Vec<(PoKOfCommitment, Bulletproof)>, GenRangeProofErrorWrapper>>()?;
 
         let messages: Vec<ProofMessage> = messages
             .iter()

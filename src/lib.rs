@@ -20,25 +20,12 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[macro_use]
 extern crate arrayref;
 
-use amcl_wrapper::group_elem_g1::{G1Vector as AMCLG1Vector, G1 as AMCLG1};
-use amcl_wrapper::{
-    field_elem::FieldElement,
-    group_elem::GroupElement,
-    ECCurve::{big::BIG, ecp::ECP},
-};
 use bbs::prelude::*;
-use bulletproofs_amcl::{
-    r1cs::{
-        gadgets::bound_check::{gen_proof_of_bounded_num, verify_proof_of_bounded_num},
-        R1CSProof,
-    },
-    utils::get_generators,
+use bulletproofs_amcl::r1cs::gadgets::pairing_plus_wrapper::{
+    gen_rangeproof, verify_rangeproof, Bulletproof, GenRangeProofError, VerifyRangeProofError,
 };
 use ff_zeroize::{PrimeField, PrimeFieldDecodingError};
-use pairing_plus::{
-    bls12_381::{Fq, FqRepr, Fr, FrRepr, G1},
-    CurveAffine, CurveProjective,
-};
+use pairing_plus::bls12_381::{Fr, FrRepr};
 use serde::{
     de::{Error as DError, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -54,6 +41,9 @@ use wasm_bindgen::prelude::*;
 
 const U8_STRING: u8 = 0u8;
 const U8_INTEGER: u8 = 1u8;
+
+// TODO: replace with more appropriate label if any
+const BULLETPROOFS_TRANSCRIPT_LABEL: &[u8] = b"BbsSignaturesWithBulletproofs";
 
 #[macro_use]
 mod macros;
@@ -266,62 +256,32 @@ fn gen_signature_message(m: &[u8]) -> Result<SignatureMessage, GenSignatureMessa
     }
 }
 
-#[derive(Debug, Clone)]
-enum GenRangeProofError {
-    ValOverflow,
-    InvalidProof,
-    InvalidCommitment,
-}
+struct GenRangeProofErrorWrapper(GenRangeProofError);
 
-impl fmt::Display for GenRangeProofError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                GenRangeProofError::ValOverflow => "val should be integer between 0 and 2^32",
-                GenRangeProofError::InvalidProof => "invalid proof",
-                GenRangeProofError::InvalidCommitment => "invalid commitment",
-            }
-        )
-    }
-}
-
-impl From<GenRangeProofError> for JsValue {
+impl From<GenRangeProofError> for GenRangeProofErrorWrapper {
     fn from(_err: GenRangeProofError) -> Self {
-        JsValue::from_str(&format!("{}", _err))
+        GenRangeProofErrorWrapper(_err)
     }
 }
 
-#[derive(Debug, Clone)]
-enum VerifyRangeProofError {
-    VerificationError,
-    InvalidCommitment,
-}
-
-impl fmt::Display for VerifyRangeProofError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                VerifyRangeProofError::VerificationError => "verification error of bulletproofs",
-                VerifyRangeProofError::InvalidCommitment => "invalid commitment",
-            }
-        )
+impl From<GenRangeProofErrorWrapper> for JsValue {
+    fn from(_err: GenRangeProofErrorWrapper) -> Self {
+        JsValue::from_str(&format!("{}", _err.0))
     }
 }
 
-impl From<VerifyRangeProofError> for JsValue {
+struct VerifyRangeProofErrorWrapper(VerifyRangeProofError);
+
+impl From<VerifyRangeProofError> for VerifyRangeProofErrorWrapper {
     fn from(_err: VerifyRangeProofError) -> Self {
-        JsValue::from_str(&format!("{}", _err))
+        VerifyRangeProofErrorWrapper(_err)
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Bulletproof {
-    proof: R1CSProof,
-    commitments: [AMCLG1; 2],
+impl From<VerifyRangeProofErrorWrapper> for JsValue {
+    fn from(_err: VerifyRangeProofErrorWrapper) -> Self {
+        JsValue::from_str(&format!("{}", _err.0))
+    }
 }
 
 fn gen_commitments_and_rangeproof(
@@ -331,7 +291,7 @@ fn gen_commitments_and_rangeproof(
     m: &SignatureMessage,
     blinding_m: &ProofNonce,
     pk: &PublicKey,
-) -> Result<(PoKOfCommitment, Bulletproof), GenRangeProofError> {
+) -> Result<(PoKOfCommitment, Bulletproof), GenRangeProofErrorWrapper> {
     // random value r for Pedersen commitment used in both Proof of Knowledge and range proofs
     let r = ProofNonce::random();
 
@@ -348,6 +308,7 @@ fn gen_commitments_and_rangeproof(
         r.as_ref(),
         min,
         max,
+        BULLETPROOFS_TRANSCRIPT_LABEL,
         pk.h[0].as_ref(),
         pk.h0.as_ref(),
         range_commitment.c.as_ref(),
@@ -362,7 +323,7 @@ fn verify_commitments_and_rangeproof(
     hidden_vec: &[usize],
     range_map: &BTreeMap<usize, (usize, usize)>,
     pk: &PublicKey,
-) -> Result<(), VerifyRangeProofError> {
+) -> Result<(), VerifyRangeProofErrorWrapper> {
     // check the equality of the hidden message in BBS+ proof and the commited value for range proofs
     if pokocs
         .iter()
@@ -378,7 +339,9 @@ fn verify_commitments_and_rangeproof(
         })
         .any(|b| !b)
     {
-        return Err(VerifyRangeProofError::InvalidCommitment);
+        return Err(VerifyRangeProofErrorWrapper(
+            VerifyRangeProofError::InvalidCommitment,
+        ));
     }
 
     // bulletproofs verification
@@ -390,154 +353,21 @@ fn verify_commitments_and_rangeproof(
             let min: u64 = (*min).try_into().unwrap();
             let max: u64 = (*max).try_into().unwrap();
 
-            let v = verify_rangeproof(bp, min, max, pk.h[0].as_ref(), pk.h0.as_ref(), p.c.as_ref());
+            let v = verify_rangeproof(
+                bp,
+                min,
+                max,
+                BULLETPROOFS_TRANSCRIPT_LABEL,
+                pk.h[0].as_ref(),
+                pk.h0.as_ref(),
+                p.c.as_ref(),
+            );
 
             v
         })
         .collect::<Result<Vec<_>, _>>()
     {
         Ok(_) => Ok(()),
-        Err(e) => Err(e),
+        Err(e) => Err(VerifyRangeProofErrorWrapper(e)),
     }
-}
-
-#[allow(non_snake_case)]
-fn gen_rangeproof(
-    val: &Fr,
-    blinding: &Fr,
-    lower: u64,
-    upper: u64,
-    g: &G1,
-    h: &G1,
-    c: &G1,
-) -> Result<Bulletproof, GenRangeProofError> {
-    // TODO: replace with more appropriate label
-    let transcript_label = b"BbsTermwiseSignature2021RangeProof";
-    // TODO: should be given as global parameters or issuer-specific public keys
-    let G: AMCLG1Vector = get_generators("G", 128).into();
-    let H: AMCLG1Vector = get_generators("H", 128).into();
-
-    let max_bits_in_val: usize = (64 - (upper - lower).leading_zeros()).try_into().unwrap();
-
-    let val_repr = val.into_repr();
-    let val_ref = val_repr.as_ref();
-    if val_ref[1] > 0 || val_ref[2] > 0 || val_ref[3] > 0 {
-        return Err(GenRangeProofError::ValOverflow);
-    }
-    let val = val_ref[0];
-
-    let blinding = pp_fr_to_amcl_fieldelement(blinding);
-    let g = pp_g1_to_amcl_g1(g);
-    let h = pp_g1_to_amcl_g1(h);
-
-    // given commitment
-    let c = pp_g1_to_amcl_g1(c);
-
-    match gen_proof_of_bounded_num(
-        val,
-        Some(blinding),
-        lower,
-        upper,
-        max_bits_in_val,
-        transcript_label,
-        &g,
-        &h,
-        &G,
-        &H,
-    ) {
-        Ok((proof, (com_v, [com_min, com_max]))) => {
-            // check the equality of two commitments generated by bbs+ and bulletproofs
-            if c == com_v {
-                Ok(Bulletproof {
-                    proof,
-                    commitments: [com_min, com_max],
-                })
-            } else {
-                Err(GenRangeProofError::InvalidCommitment)
-            }
-        }
-        _ => Err(GenRangeProofError::InvalidProof),
-    }
-}
-
-#[allow(non_snake_case)]
-fn verify_rangeproof(
-    bp: Bulletproof,
-    lower: u64,
-    upper: u64,
-    g: &G1,
-    h: &G1,
-    c: &G1,
-) -> Result<(), VerifyRangeProofError> {
-    // TODO: replace with more appropriate label
-    let transcript_label = b"BbsTermwiseSignature2021RangeProof";
-    // TODO: should be given as global parameters or issuer-specific public keys
-    let G: AMCLG1Vector = get_generators("G", 128).into();
-    let H: AMCLG1Vector = get_generators("H", 128).into();
-
-    let max_bits_in_val: usize = (64 - (upper - lower).leading_zeros()).try_into().unwrap();
-
-    let g = pp_g1_to_amcl_g1(g);
-    let h = pp_g1_to_amcl_g1(h);
-
-    // given commitment
-    let c = pp_g1_to_amcl_g1(c);
-    let commitments = &(c, bp.commitments);
-
-    match verify_proof_of_bounded_num(
-        lower,
-        upper,
-        max_bits_in_val,
-        bp.proof,
-        commitments,
-        transcript_label,
-        &g,
-        &h,
-        &G,
-        &H,
-    ) {
-        Ok(_) => Ok(()),
-        Err(_) => Err(VerifyRangeProofError::VerificationError),
-    }
-}
-
-pub fn pp_fr_to_amcl_fieldelement(fr: &Fr) -> FieldElement {
-    let frrepr: FrRepr = fr.into_repr();
-    let u64_array: &[u64] = frrepr.as_ref();
-    let mut bytes: [u8; 48] = [0; 48];
-    for i in 0..4 {
-        let tmp = u64_array[3 - i].to_be_bytes();
-        for j in 0..8 {
-            bytes[i * 8 + j + 16] = tmp[j];
-        }
-    }
-    FieldElement::from_bytes(&bytes).unwrap()
-}
-
-fn pp_fq_to_amcl_big(fq: Fq) -> BIG {
-    let pp_fqrepr: FqRepr = FqRepr::from(fq);
-    let pp_u64_array: &[u64] = pp_fqrepr.as_ref();
-    let mut bytes: [u8; 48] = [0; 48];
-    for i in 0..6 {
-        let tmp = pp_u64_array[5 - i].to_be_bytes();
-        for j in 0..8 {
-            bytes[i * 8 + j] = tmp[j];
-        }
-    }
-    BIG::frombytes(&bytes)
-}
-
-pub fn pp_g1_to_amcl_ecp(g1: &G1) -> ECP {
-    let affine = g1.into_affine();
-    let tuple_affine = affine.as_tuple();
-    let big_x = pp_fq_to_amcl_big(*tuple_affine.0);
-    let big_y = pp_fq_to_amcl_big(*tuple_affine.1);
-    ECP::new_bigs(&big_x, &big_y)
-}
-
-pub fn pp_g1_to_amcl_g1(g1: &G1) -> AMCLG1 {
-    let ecp = pp_g1_to_amcl_ecp(g1);
-    let mut bytes: [u8; 97] = [0; 97];
-    ecp.tobytes(&mut bytes, false);
-    AMCLG1::from_bytes(&bytes).unwrap()
 }
