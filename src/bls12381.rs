@@ -14,8 +14,9 @@
 use crate::utils::set_panic_hook;
 
 use crate::{
-    gen_rangeproof, gen_signature_message, verify_rangeproof, BbsVerifyResponse,
-    PoKOfSignatureProofMultiWrapper, PoKOfSignatureProofWrapper,
+    gen_commitments_and_rangeproof, gen_signature_message, verify_commitments_and_rangeproof,
+    BbsVerifyResponse, GenRangeProofError, PoKOfSignatureProofMultiWrapper,
+    PoKOfSignatureProofWrapper,
 };
 use amcl_wrapper::group_elem_g1::G1 as AMCLG1;
 use bbs::prelude::*;
@@ -36,7 +37,7 @@ use std::{
 };
 use wasm_bindgen::prelude::*;
 
-use itertools::{multizip};
+use itertools::multizip;
 
 wasm_impl!(
     /// Convenience struct for interfacing with JS.
@@ -407,9 +408,9 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     let mut poks: Vec<PoKOfSignature> = Vec::with_capacity(num_of_inputs);
     let mut message_counts: Vec<usize> = Vec::with_capacity(num_of_inputs);
-    let mut range_commitments_vec: Vec<Vec<PoKOfCommitment>> = Vec::with_capacity(num_of_inputs);
-    let mut bulletproofs_vec: Vec<Vec<(R1CSProof, Vec<AMCLG1>)>> =
-        Vec::with_capacity(num_of_inputs);
+    let mut range_commitment_and_bulletproofs_vec: Vec<
+        Vec<(PoKOfCommitment, (R1CSProof, Vec<AMCLG1>))>,
+    > = Vec::with_capacity(num_of_inputs);
 
     // generate blindings and hashmaps based on request.equivs
     let equiv_blindings: Vec<ProofNonce> = request
@@ -445,58 +446,21 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             .map(|m| gen_signature_message(m))
             .collect::<Result<Vec<_>, _>>()?;
 
-        // for range proofs
-        // generate blindings of integer m's for range proofs
+        // blinding factor for integer m used in Proof of Knowledge
         let blinding_ms: HashMap<usize, ProofNonce> = r_range
             .iter()
             .map(|&(range_idx, _, _)| (range_idx, ProofNonce::random()))
             .collect();
-        let rs: HashMap<usize, ProofNonce> = r_range
-            .iter()
-            .map(|&(range_idx, _, _)| (range_idx, ProofNonce::random()))
-            .collect();
-        // generate Pedersen commitments for range proofs
-        let range_commitment: Vec<PoKOfCommitment> = r_range
-            .iter()
-            .map(|&(range_idx, _, _)| {
-                let m = messages[range_idx];
 
-                
-                let blinding_m = blinding_ms[&range_idx];
-                let r = rs[&range_idx];
-                PoKOfCommitment::init(range_idx, &pk.h[0], &pk.h0, &m, &blinding_m, &r)
-            })
-            .collect();
-        let cs: Vec<_> = range_commitment.iter().map(|c| c.c).collect();
-        // generate bulletproofs
-        let bulletproofs = match r_range
+        // range proofs
+        let range_commitment_and_bulletproofs = r_range
             .iter()
-            .zip(cs)
-            .map(|(&(range_idx, min, max), c)| {
+            .map(|&(range_idx, min, max)| {
                 let m = messages[range_idx];
-                let r = rs[&range_idx];
-                let min: u64 = min.try_into().unwrap();
-                let max: u64 = max.try_into().unwrap();
-                gen_rangeproof(
-                    m.as_ref(),
-                    r.as_ref(),
-                    min,
-                    max,
-                    pk.h[0].as_ref(),
-                    pk.h0.as_ref(),
-                    c.as_ref(),
-                )
+                let blinding_m = blinding_ms[&range_idx];
+                gen_commitments_and_rangeproof(range_idx, min, max, &m, &blinding_m, &pk)
             })
-            .collect::<Result<Vec<_>, _>>()
-        {
-            Ok(p) => p,
-            Err(e) => {
-                return Err(JsValue::from(format!(
-                    "failed to create bulletproofs: {}",
-                    e
-                )))
-            }
-        };
+            .collect::<Result<Vec<(PoKOfCommitment, (R1CSProof, Vec<AMCLG1>))>, GenRangeProofError>>()?;
 
         let messages: Vec<ProofMessage> = messages
             .iter()
@@ -524,8 +488,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             Ok(pok) => {
                 poks.push(pok);
                 message_counts.push(r_messages.len());
-                range_commitments_vec.push(range_commitment);
-                bulletproofs_vec.push(bulletproofs);
+                range_commitment_and_bulletproofs_vec.push(range_commitment_and_bulletproofs);
             }
         }
     }
@@ -533,11 +496,11 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     // (2) challenge
     //     ch = H(bases_1, cmts_1, ..., bases_n, cmts_n, nonce)
     let nonce = ProofNonce::hash(&request.nonce);
-    let range_commitments_byte = range_commitments_vec
+    let range_commitments_byte = range_commitment_and_bulletproofs_vec
         .iter()
         .flat_map(|c| {
             c.iter()
-                .flat_map(|pokoc| pokoc.to_bytes())
+                .flat_map(|(pokoc, _)| pokoc.to_bytes())
                 .collect::<Vec<u8>>()
         })
         .collect::<Vec<u8>>();
@@ -547,31 +510,23 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     // (3) response
     let mut proofs: Vec<PoKOfSignatureProofMultiWrapper> = Vec::with_capacity(num_of_inputs);
-    for (pok, message_count, range_commitments, bulletproofs) in multizip((
-        poks,
-        message_counts,
-        range_commitments_vec,
-        bulletproofs_vec,
-    )) {
-        match (
-            pok.gen_proof(&challenge_hash),
-            range_commitments
-                .into_iter()
-                .map(|pokoc| pokoc.gen_proof(&challenge_hash))
-                .collect(),
-        ) {
-            (Ok(proof), Ok(range_commitment_proofs)) => {
-                let out = PoKOfSignatureProofMultiWrapper::new(
-                    message_count,
-                    proof,
-                    range_commitment_proofs,
-                    bulletproofs,
-                );
-                proofs.push(out);
-            }
-            (Err(e), _) => return Err(JsValue::from(&format!("{:?}", e))),
-            (_, Err(e)) => return Err(JsValue::from(&format!("{:?}", e))),
-        }
+    for (pok, message_count, range_commitment_and_bulletproofs) in
+        multizip((poks, message_counts, range_commitment_and_bulletproofs_vec))
+    {
+        let proof = pok.gen_proof(&challenge_hash)?;
+        let range_commitment_proof_and_bulletproofs = range_commitment_and_bulletproofs
+            .into_iter()
+            .map(|(pokoc, proof)| match pokoc.gen_proof(&challenge_hash) {
+                Ok(p) => Ok((p, proof)),
+                Err(e) => Err(e),
+            })
+            .collect::<Result<Vec<(PoKOfCommitmentProof, (R1CSProof, Vec<AMCLG1>))>, BBSError>>()?;
+        let out = PoKOfSignatureProofMultiWrapper::new(
+            message_count,
+            proof,
+            range_commitment_proof_and_bulletproofs,
+        );
+        proofs.push(out);
     }
 
     // CBOR-encodes each proof
@@ -649,7 +604,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     let mut proof_requests: Vec<ProofRequest> = Vec::with_capacity(num_of_inputs);
     let mut proofs: Vec<SignatureProof> = Vec::with_capacity(num_of_inputs);
     let mut hidden_vecs: Vec<Vec<usize>> = Vec::with_capacity(num_of_inputs);
-    let mut range_commitments_vec: Vec<(Vec<PoKOfCommitmentProof>, PublicKey)> =
+    let mut pokoc_and_pks: Vec<(Vec<PoKOfCommitmentProof>, PublicKey)> =
         Vec::with_capacity(num_of_inputs);
     for (i, (messages, revealed_vec, cbor_proof, dpk, range)) in multizip((
         request.messages,
@@ -663,14 +618,19 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         // decode CBOR
         let count_and_proof: PoKOfSignatureProofMultiWrapper =
             serde_cbor::from_slice(&cbor_proof).unwrap();
-        let proof = count_and_proof.proof;
-        let range_commitment_proofs = count_and_proof.range_commitment_proofs;
-        let bulletproofs = count_and_proof.bulletproofs;
-        let pk = dpk.to_public_key(count_and_proof.message_count)?;
+        let message_count = count_and_proof.message_count;
+        let pk = dpk.to_public_key(message_count)?;
+        let pokos = count_and_proof.proof;
+        let (range_pokocs, range_bulletproofs): (
+            Vec<PoKOfCommitmentProof>,
+            Vec<(R1CSProof, Vec<AMCLG1>)>,
+        ) = count_and_proof
+            .range_commitment_proof_and_bulletproofs
+            .into_iter()
+            .unzip();
 
         // indices of the range-proved messages
-        let range_index_set: BTreeSet<usize> =
-            range_commitment_proofs.iter().map(|p| p.i).collect();
+        let range_index_set: BTreeSet<usize> = range_pokocs.iter().map(|p| p.i).collect();
         let range_map: BTreeMap<_, _> =
             range.iter().map(|&(i, min, max)| (i, (min, max))).collect();
         if range_index_set != range_map.keys().cloned().collect::<BTreeSet<usize>>() {
@@ -687,7 +647,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         //       range_index_set = {4}            // m_4 is hidden and proved its range
         //       revealed_set = {0, 2}            // revealed messages are m_0 and m_2
         //       hidden_vec = [1, 3, 4]           // hidden messages are m_1, m_3, and m_4
-        let all_set: BTreeSet<usize> = (0..count_and_proof.message_count).collect();
+        let all_set: BTreeSet<usize> = (0..message_count).collect();
         let pre_revealed_set: BTreeSet<usize> = revealed_vec.clone().into_iter().collect();
         let revealed_set: BTreeSet<usize> = pre_revealed_set
             .difference(
@@ -699,58 +659,19 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             .cloned()
             .collect();
         let hidden_vec: Vec<usize> = all_set.difference(&revealed_set).cloned().collect();
+        hidden_vecs.push(hidden_vec.clone());
 
-        // for range proofs
-        // check the equality of the hidden message in BBS+ proof and the commited value for range proofs
-        if range_commitment_proofs
-            .iter()
-            .map(|p| {
-                let resp_in_cmt = p.get_resp_for_message();
-                let resp_in_proof =
-                    proof.get_resp_for_message(hidden_vec.iter().position(|x| *x == p.i).unwrap());
-
-                match (resp_in_cmt, resp_in_proof) {
-                    (Ok(rc), Ok(rp)) => rc == rp,
-                    _ => false,
-                }
-            })
-            .any(|b| !b)
-        {
-            return gen_verification_response(
-                false,
-                Some("invalid commitment for range proofs".to_string()),
-            );
-        }
-        // bulletproofs verification
-        if range_commitment_proofs
-            .iter()
-            .zip(bulletproofs)
-            .map(|(p, (bp, c))| {
-                let (min, max) = range_map.get(&p.i).unwrap();
-                let min: u64 = (*min).try_into().unwrap();
-                let max: u64 = (*max).try_into().unwrap();
-
-                let v = verify_rangeproof(
-                    bp,
-                    c,
-                    min,
-                    max,
-                    pk.h[0].as_ref(),
-                    pk.h0.as_ref(),
-                    p.c.as_ref(),
-                );
-
-                v
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .is_err()
-        {
-            return gen_verification_response(false, Some("invalid bulletproofs".to_string()));
-        }
-
-        // store for challenge hash computation later
-        hidden_vecs.push(hidden_vec);
-        range_commitments_vec.push((range_commitment_proofs, pk.clone()));
+        // verify range proofs
+        verify_commitments_and_rangeproof(
+            &range_pokocs,
+            range_bulletproofs,
+            &pokos,
+            &hidden_vec,
+            &range_map,
+            &pk,
+        )?;
+        // store for challenge hashing
+        pokoc_and_pks.push((range_pokocs, pk.clone()));
 
         // prepare revealed_messages
         // e.g, index_map = [0, 2, 3]   // m'_0 = m_0, m'_1 = m_2, m'_2 -> m_3
@@ -763,15 +684,14 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
             .iter()
             .enumerate()
             .filter_map(|(m_index, &m)| {
-            let m_index_orig = index_map[m_index];
-            if revealed_set.contains(m_index_orig) {
+                let m_index_orig = index_map[m_index];
+                if revealed_set.contains(m_index_orig) {
                     Some((*m_index_orig, m))
                 } else {
                     None
-            }
+                }
             })
             .collect();
-
 
         // prepare proof_requests
         let proof_request = ProofRequest {
@@ -783,7 +703,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         // prepare proofs
         let signature_proof = SignatureProof {
             revealed_messages,
-            proof,
+            proof: pokos,
         };
         proofs.push(signature_proof);
     }
@@ -821,10 +741,11 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     }
 
     // (2) challenge hashing
-    let range_commitments_byte = range_commitments_vec
+    let range_commitments_byte = pokoc_and_pks
         .iter()
-        .flat_map(|(c, pk)| {
-            c.iter()
+        .flat_map(|(pokocs, pk)| {
+            pokocs
+                .iter()
                 .flat_map(|pokoc| pokoc.get_bytes_for_challenge(&pk.h[0], &pk.h0))
                 .collect::<Vec<u8>>()
         })
@@ -837,7 +758,6 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         Some(&[&range_commitments_byte]),
     )
     .unwrap();
-
 
     // (3) verify
     let results: Vec<Result<Vec<SignatureMessage>, BBSError>> = proofs
@@ -867,7 +787,7 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         })
         .collect::<String>();
 
-    let results_range: Vec<Result<PoKOfCommitmentProofStatus, BBSError>> = range_commitments_vec
+    let results_range: Vec<Result<PoKOfCommitmentProofStatus, BBSError>> = pokoc_and_pks
         .iter()
         .flat_map(|(cs, pk)| {
             cs.iter()

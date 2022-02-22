@@ -43,6 +43,7 @@ use serde::{
     de::{Error as DError, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
+use std::collections::BTreeMap;
 use std::{
     array::TryFromSliceError,
     collections::BTreeSet,
@@ -72,8 +73,8 @@ pub struct PoKOfSignatureProofWrapper {
 pub struct PoKOfSignatureProofMultiWrapper {
     pub message_count: usize,
     pub proof: PoKOfSignatureProof,
-    pub range_commitment_proofs: Vec<PoKOfCommitmentProof>,
-    pub bulletproofs: Vec<(R1CSProof, Vec<AMCLG1>)>,
+    pub range_commitment_proof_and_bulletproofs:
+        Vec<(PoKOfCommitmentProof, (R1CSProof, Vec<AMCLG1>))>,
 }
 
 impl PoKOfSignatureProofWrapper {
@@ -156,14 +157,15 @@ impl PoKOfSignatureProofMultiWrapper {
     pub fn new(
         message_count: usize,
         proof: PoKOfSignatureProof,
-        range_commitment_proofs: Vec<PoKOfCommitmentProof>,
-        bulletproofs: Vec<(R1CSProof, Vec<AMCLG1>)>,
+        range_commitment_proof_and_bulletproofs: Vec<(
+            PoKOfCommitmentProof,
+            (R1CSProof, Vec<AMCLG1>),
+        )>,
     ) -> Self {
         Self {
             message_count,
             proof,
-            range_commitment_proofs,
-            bulletproofs,
+            range_commitment_proof_and_bulletproofs,
         }
     }
 }
@@ -289,6 +291,12 @@ impl fmt::Display for GenRangeProofError {
     }
 }
 
+impl From<GenRangeProofError> for JsValue {
+    fn from(_err: GenRangeProofError) -> Self {
+        JsValue::from_str(&format!("{}", _err))
+    }
+}
+
 #[derive(Debug, Clone)]
 enum VerifyRangeProofError {
     VerificationError,
@@ -308,6 +316,98 @@ impl fmt::Display for VerifyRangeProofError {
     }
 }
 
+impl From<VerifyRangeProofError> for JsValue {
+    fn from(_err: VerifyRangeProofError) -> Self {
+        JsValue::from_str(&format!("{}", _err))
+    }
+}
+
+fn gen_commitments_and_rangeproof(
+    range_idx: usize,
+    min: usize,
+    max: usize,
+    m: &SignatureMessage,
+    blinding_m: &ProofNonce,
+    pk: &PublicKey,
+) -> Result<(PoKOfCommitment, (R1CSProof, Vec<AMCLG1>)), GenRangeProofError> {
+    // random value r for Pedersen commitment used in both Proof of Knowledge and range proofs
+    let r = ProofNonce::random();
+
+    let min: u64 = min.try_into().unwrap();
+    let max: u64 = max.try_into().unwrap();
+
+    // Pedersen commitments used in both Proof of Knowledge and range proofs
+    let range_commitment: PoKOfCommitment =
+        PoKOfCommitment::init(range_idx, &pk.h[0], &pk.h0, m, blinding_m, &r);
+
+    // generate bulletproofs
+    let bulletproof = gen_rangeproof(
+        m.as_ref(),
+        r.as_ref(),
+        min,
+        max,
+        pk.h[0].as_ref(),
+        pk.h0.as_ref(),
+        range_commitment.c.as_ref(),
+    )?;
+    Ok((range_commitment, bulletproof))
+}
+
+fn verify_commitments_and_rangeproof(
+    range_pokocs: &[PoKOfCommitmentProof],
+    range_bulletproofs: Vec<(R1CSProof, Vec<AMCLG1>)>,
+    proof: &PoKOfSignatureProof,
+    hidden_vec: &[usize],
+    range_map: &BTreeMap<usize, (usize, usize)>,
+    pk: &PublicKey,
+) -> Result<(), VerifyRangeProofError> {
+    // check the equality of the hidden message in BBS+ proof and the commited value for range proofs
+    if range_pokocs
+        .iter()
+        .map(|p| {
+            let resp_in_cmt = p.get_resp_for_message();
+            let resp_in_proof =
+                proof.get_resp_for_message(hidden_vec.iter().position(|x| *x == p.i).unwrap());
+
+            match (resp_in_cmt, resp_in_proof) {
+                (Ok(rc), Ok(rp)) => rc == rp,
+                _ => false,
+            }
+        })
+        .any(|b| !b)
+    {
+        return Err(VerifyRangeProofError::InvalidCommitment);
+    }
+
+    // bulletproofs verification
+    match range_pokocs
+        .iter()
+        .zip(range_bulletproofs)
+        .map(|(p, (bp, c))| {
+            let (min, max) = range_map.get(&p.i).unwrap();
+            let min: u64 = (*min).try_into().unwrap();
+            let max: u64 = (*max).try_into().unwrap();
+
+            let v = verify_rangeproof(
+                bp,
+                c,
+                min,
+                max,
+                pk.h[0].as_ref(),
+                pk.h0.as_ref(),
+                p.c.as_ref(),
+            );
+
+            v
+        })
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+#[allow(non_snake_case)]
 fn gen_rangeproof(
     val: &Fr,
     blinding: &Fr,
@@ -363,6 +463,7 @@ fn gen_rangeproof(
     }
 }
 
+#[allow(non_snake_case)]
 fn verify_rangeproof(
     proof: R1CSProof,
     commitments: Vec<AMCLG1>,
@@ -377,7 +478,7 @@ fn verify_rangeproof(
     // TODO: should be given as global parameters or issuer-specific public keys
     let G: AMCLG1Vector = get_generators("G", 128).into();
     let H: AMCLG1Vector = get_generators("H", 128).into();
-    
+
     let max_bits_in_val: usize = (64 - (upper - lower).leading_zeros()).try_into().unwrap();
 
     let g = pp_g1_to_amcl_g1(g);
