@@ -15,12 +15,10 @@ use crate::utils::set_panic_hook;
 
 use crate::{
     gen_commitments_and_rangeproof, gen_signature_message, verify_commitments_and_rangeproof,
-    BbsVerifyResponse, GenRangeProofError, PoKOfSignatureProofMultiWrapper,
+    BbsVerifyResponse, Bulletproof, GenRangeProofError, PoKOfSignatureProofMultiWrapper,
     PoKOfSignatureProofWrapper,
 };
-use amcl_wrapper::group_elem_g1::G1 as AMCLG1;
 use bbs::prelude::*;
-use bulletproofs_amcl::r1cs::R1CSProof;
 use pairing_plus::{
     bls12_381::{Bls12, Fr, G1, G2},
     hash_to_field::BaseFromRO,
@@ -408,9 +406,8 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
 
     let mut poks: Vec<PoKOfSignature> = Vec::with_capacity(num_of_inputs);
     let mut message_counts: Vec<usize> = Vec::with_capacity(num_of_inputs);
-    let mut range_commitment_and_bulletproofs_vec: Vec<
-        Vec<(PoKOfCommitment, (R1CSProof, Vec<AMCLG1>))>,
-    > = Vec::with_capacity(num_of_inputs);
+    let mut range_commitment_and_bulletproofs_vec: Vec<Vec<(PoKOfCommitment, Bulletproof)>> =
+        Vec::with_capacity(num_of_inputs);
 
     // generate blindings and hashmaps based on request.equivs
     let equiv_blindings: Vec<ProofNonce> = request
@@ -460,7 +457,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
                 let blinding_m = blinding_ms[&range_idx];
                 gen_commitments_and_rangeproof(range_idx, min, max, &m, &blinding_m, &pk)
             })
-            .collect::<Result<Vec<(PoKOfCommitment, (R1CSProof, Vec<AMCLG1>))>, GenRangeProofError>>()?;
+            .collect::<Result<Vec<(PoKOfCommitment, Bulletproof)>, GenRangeProofError>>()?;
 
         let messages: Vec<ProofMessage> = messages
             .iter()
@@ -520,7 +517,7 @@ pub async fn bls_create_proof_multi(request: JsValue) -> Result<JsValue, JsValue
                 Ok(p) => Ok((p, proof)),
                 Err(e) => Err(e),
             })
-            .collect::<Result<Vec<(PoKOfCommitmentProof, (R1CSProof, Vec<AMCLG1>))>, BBSError>>()?;
+            .collect::<Result<Vec<(PoKOfCommitmentProof, Bulletproof)>, BBSError>>()?;
         let out = PoKOfSignatureProofMultiWrapper::new(
             message_count,
             proof,
@@ -621,10 +618,8 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
         let message_count = count_and_proof.message_count;
         let pk = dpk.to_public_key(message_count)?;
         let pokos = count_and_proof.proof;
-        let (range_pokocs, range_bulletproofs): (
-            Vec<PoKOfCommitmentProof>,
-            Vec<(R1CSProof, Vec<AMCLG1>)>,
-        ) = count_and_proof
+        let (range_pokocs, range_bulletproofs): (Vec<PoKOfCommitmentProof>, Vec<Bulletproof>) =
+            count_and_proof
             .range_commitment_proof_and_bulletproofs
             .into_iter()
             .unzip();
