@@ -42,4 +42,15 @@ export interface BbsVerifyProofMultiRequest {
    *   - attribute 4 in credential 0 and attribute 5 in credential 1 are proved to be the same
    */
   readonly equivs: readonly [number, number][][];
+  /**
+   * The term indicies and ranges for range proofs
+   * e.g., [
+   *         [ [18, 0, 1000], [22, 0, 1000], [30, 0, 1000], [34, 100000, 150000] ],
+   *         [ [18, 1, 5] ]
+   *       ] means:
+   *   - 18th, 22nd, and 30th attribute in credential 0 are proved to be values between 0 and 1000
+   *   - 34th attribute in credential 0 is proved to be a value between 100000 and 150000
+   *   - 18th attribute in credential 1 is proved to be a value between 1 and 5
+   */
+  readonly range: readonly [number, number, number][][];
 }

@@ -21,12 +21,29 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 extern crate arrayref;
 
 use bbs::prelude::*;
+use bulletproofs_amcl::r1cs::gadgets::pairing_plus_wrapper::{
+    gen_rangeproof, verify_rangeproof, Bulletproof, GenRangeProofError, VerifyRangeProofError,
+};
+use ff_zeroize::{PrimeField, PrimeFieldDecodingError};
+use pairing_plus::bls12_381::{Fr, FrRepr};
 use serde::{
     de::{Error as DError, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::{collections::BTreeSet, convert::TryFrom};
+use std::collections::BTreeMap;
+use std::{
+    array::TryFromSliceError,
+    collections::BTreeSet,
+    convert::{TryFrom, TryInto},
+    error, fmt,
+};
 use wasm_bindgen::prelude::*;
+
+const U8_STRING: u8 = 0u8;
+const U8_INTEGER: u8 = 1u8;
+
+// TODO: replace with more appropriate label if any
+const BULLETPROOFS_TRANSCRIPT_LABEL: &[u8] = b"BbsSignaturesWithBulletproofs";
 
 #[macro_use]
 mod macros;
@@ -42,10 +59,11 @@ pub struct PoKOfSignatureProofWrapper {
     pub proof: PoKOfSignatureProof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PoKOfSignatureProofMultiWrapper {
     pub message_count: usize,
     pub proof: PoKOfSignatureProof,
+    pub range_commitment_proof_and_bulletproofs: Vec<(PoKOfCommitmentProof, Bulletproof)>,
 }
 
 impl PoKOfSignatureProofWrapper {
@@ -125,68 +143,16 @@ impl<'a> Deserialize<'a> for PoKOfSignatureProofWrapper {
 }
 
 impl PoKOfSignatureProofMultiWrapper {
-    pub fn new(message_count: usize, proof: PoKOfSignatureProof) -> Self {
+    pub fn new(
+        message_count: usize,
+        proof: PoKOfSignatureProof,
+        range_commitment_proof_and_bulletproofs: Vec<(PoKOfCommitmentProof, Bulletproof)>,
+    ) -> Self {
         Self {
             message_count,
             proof,
+            range_commitment_proof_and_bulletproofs,
         }
-    }
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut data = (self.message_count as u16).to_be_bytes().to_vec();
-        data.append(&mut self.proof.to_bytes_compressed_form());
-        data
-    }
-}
-
-impl TryFrom<&[u8]> for PoKOfSignatureProofMultiWrapper {
-    type Error = JsValue;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        if value.len() < 2 {
-            return Err(JsValue::FALSE);
-        }
-        let message_count = u16::from_be_bytes(*array_ref![value, 0, 2]) as usize;
-        let proof = map_err!(PoKOfSignatureProof::try_from(&value[2..]))?;
-        Ok(Self {
-            message_count,
-            proof,
-        })
-    }
-}
-
-impl Serialize for PoKOfSignatureProofMultiWrapper {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_bytes(&self.to_bytes().as_slice())
-    }
-}
-
-impl<'a> Deserialize<'a> for PoKOfSignatureProofMultiWrapper {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
-        struct DeserializeVisitor;
-
-        impl<'a> Visitor<'a> for DeserializeVisitor {
-            type Value = PoKOfSignatureProofMultiWrapper;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("expected byte array")
-            }
-
-            fn visit_bytes<E>(self, value: &[u8]) -> Result<PoKOfSignatureProofMultiWrapper, E>
-            where
-                E: DError,
-            {
-                PoKOfSignatureProofMultiWrapper::try_from(value)
-                    .map_err(|_| DError::invalid_value(serde::de::Unexpected::Bytes(value), &self))
-            }
-        }
-
-        deserializer.deserialize_bytes(DeserializeVisitor)
     }
 }
 
@@ -230,4 +196,178 @@ pub(crate) fn bitvector_to_revealed(data: &[u8]) -> BTreeSet<usize> {
         scalar += remaining;
     }
     revealed_messages
+}
+
+#[derive(Debug, Clone)]
+enum GenSignatureMessageError {
+    EmptyMessage,
+    InvalidBitLength,
+    InvalidMessageType,
+    TryFromSliceError,
+    PrimeFieldDecodingError,
+}
+
+impl fmt::Display for GenSignatureMessageError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SignatureMessage generation error")
+    }
+}
+
+impl error::Error for GenSignatureMessageError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        None
+    }
+}
+
+impl From<TryFromSliceError> for GenSignatureMessageError {
+    fn from(_err: TryFromSliceError) -> GenSignatureMessageError {
+        GenSignatureMessageError::TryFromSliceError
+    }
+}
+
+impl From<PrimeFieldDecodingError> for GenSignatureMessageError {
+    fn from(_err: PrimeFieldDecodingError) -> GenSignatureMessageError {
+        GenSignatureMessageError::PrimeFieldDecodingError
+    }
+}
+
+impl From<GenSignatureMessageError> for JsValue {
+    fn from(_err: GenSignatureMessageError) -> Self {
+        JsValue::from_str(&format!("{}", _err))
+    }
+}
+
+fn gen_signature_message(m: &[u8]) -> Result<SignatureMessage, GenSignatureMessageError> {
+    if m.is_empty() {
+        return Err(GenSignatureMessageError::EmptyMessage);
+    }
+
+    match m[0] {
+        U8_STRING => Ok(SignatureMessage::hash(&m[1..])),
+        U8_INTEGER => {
+            if m.len() != 5 {
+                return Err(GenSignatureMessageError::InvalidBitLength);
+            };
+            let m_64 = [&[0; 4], &m[1..5]].concat(); // pad 0's to make 32-bit integer to 64-bit
+            let v = Fr::from_repr(FrRepr::from(u64::from_be_bytes(m_64[..].try_into()?)))?;
+            Ok(SignatureMessage::from(v))
+        }
+        _ => Err(GenSignatureMessageError::InvalidMessageType),
+    }
+}
+
+struct GenRangeProofErrorWrapper(GenRangeProofError);
+
+impl From<GenRangeProofError> for GenRangeProofErrorWrapper {
+    fn from(_err: GenRangeProofError) -> Self {
+        GenRangeProofErrorWrapper(_err)
+    }
+}
+
+impl From<GenRangeProofErrorWrapper> for JsValue {
+    fn from(_err: GenRangeProofErrorWrapper) -> Self {
+        JsValue::from_str(&format!("{}", _err.0))
+    }
+}
+
+struct VerifyRangeProofErrorWrapper(VerifyRangeProofError);
+
+impl From<VerifyRangeProofError> for VerifyRangeProofErrorWrapper {
+    fn from(_err: VerifyRangeProofError) -> Self {
+        VerifyRangeProofErrorWrapper(_err)
+    }
+}
+
+impl From<VerifyRangeProofErrorWrapper> for JsValue {
+    fn from(_err: VerifyRangeProofErrorWrapper) -> Self {
+        JsValue::from_str(&format!("{}", _err.0))
+    }
+}
+
+fn gen_commitments_and_rangeproof(
+    range_idx: usize,
+    min: usize,
+    max: usize,
+    m: &SignatureMessage,
+    blinding_m: &ProofNonce,
+    pk: &PublicKey,
+) -> Result<(PoKOfCommitment, Bulletproof), GenRangeProofErrorWrapper> {
+    // random value r for Pedersen commitment used in both Proof of Knowledge and range proofs
+    let r = ProofNonce::random();
+
+    let min: u64 = min.try_into().unwrap();
+    let max: u64 = max.try_into().unwrap();
+
+    // Pedersen commitments used in both Proof of Knowledge and range proofs
+    let range_commitment: PoKOfCommitment =
+        PoKOfCommitment::init(range_idx, &pk.h[0], &pk.h0, m, blinding_m, &r);
+
+    // generate bulletproofs
+    let bulletproof = gen_rangeproof(
+        m.as_ref(),
+        r.as_ref(),
+        min,
+        max,
+        BULLETPROOFS_TRANSCRIPT_LABEL,
+        pk.h[0].as_ref(),
+        pk.h0.as_ref(),
+        range_commitment.c.as_ref(),
+    )?;
+    Ok((range_commitment, bulletproof))
+}
+
+fn verify_commitments_and_rangeproof(
+    pokocs: &[PoKOfCommitmentProof],
+    bulletproofs: Vec<Bulletproof>,
+    proof: &PoKOfSignatureProof,
+    hidden_vec: &[usize],
+    range_map: &BTreeMap<usize, (usize, usize)>,
+    pk: &PublicKey,
+) -> Result<(), VerifyRangeProofErrorWrapper> {
+    // check the equality of the hidden message in BBS+ proof and the commited value for range proofs
+    if pokocs
+        .iter()
+        .map(|p| {
+            let resp_in_cmt = p.get_resp_for_message();
+            let resp_in_proof =
+                proof.get_resp_for_message(hidden_vec.iter().position(|x| *x == p.i).unwrap());
+
+            match (resp_in_cmt, resp_in_proof) {
+                (Ok(rc), Ok(rp)) => rc == rp,
+                _ => false,
+            }
+        })
+        .any(|b| !b)
+    {
+        return Err(VerifyRangeProofErrorWrapper(
+            VerifyRangeProofError::InvalidCommitment,
+        ));
+    }
+
+    // bulletproofs verification
+    match pokocs
+        .iter()
+        .zip(bulletproofs)
+        .map(|(p, bp)| {
+            let (min, max) = range_map.get(&p.i).unwrap();
+            let min: u64 = (*min).try_into().unwrap();
+            let max: u64 = (*max).try_into().unwrap();
+
+            let v = verify_rangeproof(
+                bp,
+                min,
+                max,
+                BULLETPROOFS_TRANSCRIPT_LABEL,
+                pk.h[0].as_ref(),
+                pk.h0.as_ref(),
+                p.c.as_ref(),
+            );
+
+            v
+        })
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(_) => Ok(()),
+        Err(e) => Err(VerifyRangeProofErrorWrapper(e)),
+    }
 }
