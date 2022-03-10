@@ -20,7 +20,7 @@ checksum = "ee2a4ec343196209d6594e19543ae87a39f96d5534d7174822a3ad825dd6ed7e"
 [[package]]
 name = "amcl_wrapper"
 version = "0.4.0"
-source = "git+https://github.com/yamdan/amcl_rust_wrapper.git#e8c7b6b266b872d03ed5a00b702ba3041156571c"
+source = "git+https://github.com/zkp-ld/amcl_rust_wrapper.git#e8c7b6b266b872d03ed5a00b702ba3041156571c"
 dependencies = [
  "byteorder",
  "lazy_static",
@@ -74,7 +74,7 @@ dependencies = [
 [[package]]
 name = "bbs"
 version = "0.4.2"
-source = "git+https://github.com/zkp-ld/ursa?branch=bbs-rangeproof#d36f3e523b7c76725c36554540448b08a5d9d3e1"
+source = "git+https://github.com/zkp-ld/ursa?branch=bbs-rangeproof#051ac686f9860e6d514d64c1cbeb0ce86da75e1d"
 dependencies = [
  "arrayref",
  "blake2",
@@ -145,7 +145,7 @@ dependencies = [
 [[package]]
 name = "bulletproofs_amcl"
 version = "0.2.0"
-source = "git+https://github.com/zkp-ld/ursa?branch=bbs-rangeproof#d36f3e523b7c76725c36554540448b08a5d9d3e1"
+source = "git+https://github.com/zkp-ld/ursa?branch=bbs-rangeproof#051ac686f9860e6d514d64c1cbeb0ce86da75e1d"
 dependencies = [
  "amcl_wrapper",
  "byteorder",
