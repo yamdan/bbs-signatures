@@ -1,10 +1,10 @@
 [package]
-authors = ["Tobias Looker <tobias.looker@mattr.global>", "Mike Lodder <redmike7@gmail.com>"]
+authors = ["yamdan"]
 description = "WASM binding to bbs rust crate"
 edition = "2018"
 license = "Apache-2.0"
 name = "wasm"
-repository = "https://github.com/mattrglobal/bbs-signatures"
+repository = "https://github.com/zkp-ld/bbs-signatures"
 version = "0.1.0"
 
 [lib]
@@ -16,8 +16,8 @@ default = ["wee_alloc"]
 
 [dependencies]
 arrayref = "0.3"
-bbs = { git = "https://github.com/yamdan/ursa", branch="bbs-rangeproof", default-features = false, features = ["wasm"] }
-bulletproofs_amcl = { git = "https://github.com/yamdan/ursa", branch = "bbs-rangeproof" }
+bbs = { git = "https://github.com/zkp-ld/ursa", branch="bbs-rangeproof", default-features = false, features = ["wasm"] }
+bulletproofs_amcl = { git = "https://github.com/zkp-ld/ursa", branch = "bbs-rangeproof" }
 console_error_panic_hook = { version = "0.1.1", optional = true }
 ff-zeroize = "0.6"
 hkdf = "0.8"
