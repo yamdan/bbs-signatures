@@ -48,6 +48,7 @@ const BULLETPROOFS_TRANSCRIPT_LABEL: &[u8] = b"BbsSignaturesWithBulletproofs";
 #[macro_use]
 mod macros;
 pub mod bbs_plus;
+pub mod bounded_bls12381;
 pub mod bls12381;
 mod utils;
 
@@ -158,6 +159,7 @@ impl PoKOfSignatureProofMultiWrapper {
 
 pub mod prelude {
     pub use crate::bbs_plus::*;
+    pub use crate::bounded_bls12381::*;
     pub use crate::bls12381::*;
 }
 
