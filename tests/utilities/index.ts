@@ -37,3 +37,29 @@ export const base64Decode = (string: string): Uint8Array => {
  */
 export const stringToBytes = (string: string): Uint8Array =>
   Uint8Array.from(Buffer.from(string, "utf-8"));
+
+export const U8_STRING = 0;
+export const U8_INTEGER = 1;
+
+/**
+ * Converts a UTF-8 Encoded string to a byte array with a datatype prefix
+ * @param string
+ */
+export const stringToTypedBytes = (string: string): Uint8Array =>
+  Uint8Array.of(
+    U8_STRING, // represents that this array encodes string
+    ...Buffer.from(string, "utf-8")
+  );
+
+/**
+ * Converts an integer to a byte array with a datatype prefix
+ * @param integer
+ */
+export const integerToTypedBytes = (num: number): Uint8Array =>
+  Uint8Array.of(
+    U8_INTEGER, // represents that this array encodes 32-bit integer (big endian)
+    (num & 0xff000000) >> 24,
+    (num & 0x00ff0000) >> 16,
+    (num & 0x0000ff00) >> 8,
+    (num & 0x000000ff) >> 0
+  );
