@@ -614,15 +614,20 @@ pub async fn bls_verify_proof_multi(request: JsValue) -> Result<JsValue, JsValue
     {
         // decode CBOR
         let count_and_proof: PoKOfSignatureProofMultiWrapper =
-            serde_cbor::from_slice(&cbor_proof).unwrap();
+            match serde_cbor::from_slice(&cbor_proof) {
+                Ok(value) => value,
+                Err(_) => {
+                    return gen_verification_response(false, Some("invalid proof".to_string()))
+                }
+            };
         let message_count = count_and_proof.message_count;
         let pk = dpk.to_public_key(message_count)?;
         let pokos = count_and_proof.proof;
         let (range_pokocs, range_bulletproofs): (Vec<PoKOfCommitmentProof>, Vec<Bulletproof>) =
             count_and_proof
-            .range_commitment_proof_and_bulletproofs
-            .into_iter()
-            .unzip();
+                .range_commitment_proof_and_bulletproofs
+                .into_iter()
+                .unzip();
 
         // indices of the range-proved messages
         let range_index_set: BTreeSet<usize> = range_pokocs.iter().map(|p| p.i).collect();

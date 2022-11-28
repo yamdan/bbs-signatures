@@ -39,8 +39,8 @@ use std::{
 };
 use wasm_bindgen::prelude::*;
 
-const U8_STRING: u8 = 0u8;
-const U8_INTEGER: u8 = 1u8;
+pub const U8_STRING: u8 = 0u8;
+pub const U8_INTEGER: u8 = 1u8;
 
 // TODO: replace with more appropriate label if any
 const BULLETPROOFS_TRANSCRIPT_LABEL: &[u8] = b"BbsSignaturesWithBulletproofs";
@@ -211,7 +211,13 @@ enum GenSignatureMessageError {
 
 impl fmt::Display for GenSignatureMessageError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SignatureMessage generation error")
+        match self {
+            Self::EmptyMessage => write!(f, "SignatureMessage generation error: empty message"),
+            Self::InvalidBitLength => write!(f, "SignatureMessage generation error: invalid bit length"),
+            Self::InvalidMessageType => write!(f, "SignatureMessage generation error: invalid message type"),
+            Self::PrimeFieldDecodingError => write!(f, "SignatureMessage generation error: prime field decoding error"),
+            Self::TryFromSliceError => write!(f, "SignatureMessage generation error: try from slice error"),
+        }        
     }
 }
 

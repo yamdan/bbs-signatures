@@ -17,8 +17,7 @@
 extern crate wasm_bindgen_test;
 use bbs::prelude::*;
 use wasm::prelude::*;
-use wasm::BbsVerifyResponse;
-use wasm::PoKOfSignatureProofMultiWrapper;
+use wasm::{BbsVerifyResponse, U8_STRING};
 // use wasm::log;
 use arrayref::array_ref;
 use wasm_bindgen_test::*;
@@ -28,7 +27,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 #[allow(non_snake_case)]
 #[wasm_bindgen_test]
 async fn bls_public_key_to_bbs_key_test() {
-    let (dpk, _) = DeterministicPublicKey::new(None);
+    let (dpk, _) = DeterministicPublicKey::new(None).unwrap();
     let request = Bls12381ToBbsRequest {
         keyPair: BlsKeyPair {
             publicKey: Some(dpk.to_bytes_compressed_form().to_vec()),
@@ -50,7 +49,7 @@ async fn bls_public_key_to_bbs_key_test() {
 #[allow(non_snake_case)]
 #[wasm_bindgen_test]
 async fn bls_secret_key_to_bbs_key_test() {
-    let (_, sk) = DeterministicPublicKey::new(None);
+    let (_, sk) = DeterministicPublicKey::new(None).unwrap();
     let request = Bls12381ToBbsRequest {
         keyPair: BlsKeyPair {
             publicKey: None,
@@ -133,17 +132,23 @@ async fn bls_generate_key_test() {
     assert_eq!(secretKey.length(), 32);
 }
 
+fn string_to_typed_bytes(message: &str) -> Vec<u8> {
+    let mut bytes = vec![U8_STRING];
+    bytes.extend(message.as_bytes());
+    bytes
+}
+
 #[allow(non_snake_case)]
 #[wasm_bindgen_test]
 pub async fn bls_single_whole_success_test() {
     // issue credential
     let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
     let messages0 = vec![
-        b"Message[0,0]".to_vec(),
-        b"Message[0,1]".to_vec(),
-        b"Message_EQ_0".to_vec(),
-        b"Message_EQ_0".to_vec(),
-        b"Message[0,4]".to_vec(),
+        string_to_typed_bytes("Message[0,0]"),
+        string_to_typed_bytes("Message[0,1]"),
+        string_to_typed_bytes("Message_EQ_0"),
+        string_to_typed_bytes("Message_EQ_0"),
+        string_to_typed_bytes("Message[0,4]"),
     ];
     let sign_request0 = BlsBbsSignRequest {
         keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
@@ -180,23 +185,22 @@ pub async fn bls_single_whole_success_test() {
         revealed: vec![revealed0.clone()],
         nonce: vec![0],
         equivs: vec![eq0],
+        range: vec![vec![]],
     };
     let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
     let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
     assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
-    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
-        derived_proofs_js.unwrap(),
-    )
-    .unwrap();
+    let derived_proofs =
+        serde_wasm_bindgen::from_value::<Vec<Vec<u8>>>(derived_proofs_js.unwrap()).unwrap();
     assert_eq!(derived_proofs.len(), 1);
 
     // verify derived proof
     let revealed_messages0 = vec![
-        b"Message[0,0]".to_vec(), // revealed
-        b"Message[0,1]".to_vec(), // revealed
-        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_0"
-        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_0"
-                                  // hidden;                        was "Message[0,4]"
+        string_to_typed_bytes("Message[0,0]"), // revealed
+        string_to_typed_bytes("Message[0,1]"), // revealed
+        string_to_typed_bytes("___DUMMY____"), // hidden with proof of equality; was "Message_EQ_0"
+        string_to_typed_bytes("___DUMMY____"), // hidden with proof of equality; was "Message_EQ_0"
+                                            // hidden;                        was "Message[0,4]"
     ];
     let eqv0 = vec![(0, 2), (0, 3)]; // equivalence class corresponding to "___DUMMY_EQ_0_"
     let verify_proof_request = BlsVerifyProofMultiContext {
@@ -206,6 +210,7 @@ pub async fn bls_single_whole_success_test() {
         revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![eqv0],
+        range: vec![vec![]],
     };
     let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
     let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
@@ -226,11 +231,11 @@ pub async fn bls_single_invalid_derive_test() {
     // issue credential
     let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
     let messages0 = vec![
-        b"Message[0,0]".to_vec(),
-        b"Message[0,1]".to_vec(),
-        b"Message[0,2]".to_vec(),
-        b"Message[0,3]".to_vec(),
-        b"Message[0,4]".to_vec(),
+        string_to_typed_bytes("Message[0,0]"),
+        string_to_typed_bytes("Message[0,1]"),
+        string_to_typed_bytes("Message[0,2]"),
+        string_to_typed_bytes("Message[0,3]"),
+        string_to_typed_bytes("Message[0,4]"),
     ];
     let sign_request0 = BlsBbsSignRequest {
         keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
@@ -255,23 +260,22 @@ pub async fn bls_single_invalid_derive_test() {
         revealed: vec![revealed0.clone()],
         nonce: vec![0],
         equivs: vec![eq0],
+        range: vec![vec![]],
     };
     let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
     let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
     assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
-    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
-        derived_proofs_js.unwrap(),
-    )
-    .unwrap();
+    let derived_proofs =
+        serde_wasm_bindgen::from_value::<Vec<Vec<u8>>>(derived_proofs_js.unwrap()).unwrap();
     assert_eq!(derived_proofs.len(), 1);
 
     // verify derived proof
     let revealed_messages0 = vec![
-        b"Message[0,0]".to_vec(), // revealed
-        b"Message[0,1]".to_vec(), // revealed
-        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message[0,2]"
-        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message[0,3]"
-                                  // hidden;                        was "Message[0,4]"
+        string_to_typed_bytes("Message[0,0]"), // revealed
+        string_to_typed_bytes("Message[0,1]"), // revealed
+        string_to_typed_bytes("___DUMMY____"), // hidden with proof of equality; was "Message[0,2]"
+        string_to_typed_bytes("___DUMMY____"), // hidden with proof of equality; was "Message[0,3]"
+                                            // hidden;                        was "Message[0,4]"
     ];
     let eqv0 = vec![(0, 2), (0, 3)]; // equivalence class corresponding to two different "Message[0,2]" and "Message[0,3]" incorrectly
     let verify_proof_request = BlsVerifyProofMultiContext {
@@ -281,6 +285,7 @@ pub async fn bls_single_invalid_derive_test() {
         revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![eqv0],
+        range: vec![vec![]],
     };
     let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
     let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
@@ -297,11 +302,11 @@ pub async fn bls_single_redundant_index_test() {
     // issue credential
     let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
     let messages0 = vec![
-        b"Message[0,0]".to_vec(),
-        b"Message[0,1]".to_vec(),
-        b"Message[0,2]".to_vec(),
-        b"Message[0,3]".to_vec(),
-        b"Message[0,4]".to_vec(),
+        string_to_typed_bytes("Message[0,0]"),
+        string_to_typed_bytes("Message[0,1]"),
+        string_to_typed_bytes("Message[0,2]"),
+        string_to_typed_bytes("Message[0,3]"),
+        string_to_typed_bytes("Message[0,4]"),
     ];
     let sign_request0 = BlsBbsSignRequest {
         keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
@@ -325,23 +330,22 @@ pub async fn bls_single_redundant_index_test() {
         revealed: vec![revealed0.clone()],
         nonce: vec![0],
         equivs: vec![],
+        range: vec![vec![]],
     };
     let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
     let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
     assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
-    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
-        derived_proofs_js.unwrap(),
-    )
-    .unwrap();
+    let derived_proofs =
+        serde_wasm_bindgen::from_value::<Vec<Vec<u8>>>(derived_proofs_js.unwrap()).unwrap();
     assert_eq!(derived_proofs.len(), 1);
 
     // verify derived proof
     let revealed_messages0 = vec![
-        b"Message[0,0]".to_vec(), // revealed
+        string_to_typed_bytes("Message[0,0]"), // revealed
         // hidden
         // hidden
-        b"Message[0,3]".to_vec(), // revealed
-        b"Message[0,4]".to_vec(), // revealed
+        string_to_typed_bytes("Message[0,3]"), // revealed
+        string_to_typed_bytes("Message[0,4]"), // revealed
     ];
     let verify_proof_request = BlsVerifyProofMultiContext {
         proof: derived_proofs,
@@ -350,6 +354,7 @@ pub async fn bls_single_redundant_index_test() {
         revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![],
+        range: vec![vec![]],
     };
     let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
     let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
@@ -369,7 +374,10 @@ pub async fn bls_single_redundant_index_test() {
 pub async fn bls_single_out_of_revealed_index_test() {
     // issue credential
     let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
-    let messages0 = vec![b"Message[0,0]".to_vec(), b"Message[0,1]".to_vec()];
+    let messages0 = vec![
+        string_to_typed_bytes("Message[0,0]"),
+        string_to_typed_bytes("Message[0,1]"),
+    ];
     let sign_request0 = BlsBbsSignRequest {
         keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
         messages: messages0.clone(),
@@ -392,6 +400,7 @@ pub async fn bls_single_out_of_revealed_index_test() {
         revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![],
+        range: vec![vec![]],
     };
     let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
     let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
@@ -403,7 +412,10 @@ pub async fn bls_single_out_of_revealed_index_test() {
 pub async fn bls_single_meaningless_equivs_test() {
     // issue credential
     let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
-    let messages0 = vec![b"Message[0,0]".to_vec(), b"Message[0,1]".to_vec()];
+    let messages0 = vec![
+        string_to_typed_bytes("Message[0,0]"),
+        string_to_typed_bytes("Message[0,1]"),
+    ];
     let sign_request0 = BlsBbsSignRequest {
         keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
         messages: messages0.clone(),
@@ -427,20 +439,19 @@ pub async fn bls_single_meaningless_equivs_test() {
         revealed: vec![revealed0.clone()],
         nonce: vec![0],
         equivs: vec![eq0],
+        range: vec![vec![]],
     };
     let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
     let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
     assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
-    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
-        derived_proofs_js.unwrap(),
-    )
-    .unwrap();
+    let derived_proofs =
+        serde_wasm_bindgen::from_value::<Vec<Vec<u8>>>(derived_proofs_js.unwrap()).unwrap();
     assert_eq!(derived_proofs.len(), 1);
 
     // verify derived proof
     let revealed_messages0 = vec![
-        b"Message[0,0]".to_vec(), // revealed
-        b"Message[0,1]".to_vec(), // revealed
+        string_to_typed_bytes("Message[0,0]"), // revealed
+        string_to_typed_bytes("Message[0,1]"), // revealed
     ];
     let eqv0 = vec![(0, 0)]; // equivalence class with only one element (meaningless)
     let verify_proof_request = BlsVerifyProofMultiContext {
@@ -450,6 +461,7 @@ pub async fn bls_single_meaningless_equivs_test() {
         revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![eqv0],
+        range: vec![vec![]],
     };
     let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
     let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
@@ -469,7 +481,10 @@ pub async fn bls_single_meaningless_equivs_test() {
 pub async fn bls_single_invalid_equivs_test() {
     // issue credential
     let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
-    let messages0 = vec![b"Message[0,0]".to_vec(), b"Message[0,1]".to_vec()];
+    let messages0 = vec![
+        string_to_typed_bytes("Message[0,0]"),
+        string_to_typed_bytes("Message[0,1]"),
+    ];
     let sign_request0 = BlsBbsSignRequest {
         keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
         messages: messages0.clone(),
@@ -492,20 +507,19 @@ pub async fn bls_single_invalid_equivs_test() {
         revealed: vec![revealed0.clone()],
         nonce: vec![0],
         equivs: vec![], // no equivalence class is given
+        range: vec![vec![]],
     };
     let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
     let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
     assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
-    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
-        derived_proofs_js.unwrap(),
-    )
-    .unwrap();
+    let derived_proofs =
+        serde_wasm_bindgen::from_value::<Vec<Vec<u8>>>(derived_proofs_js.unwrap()).unwrap();
     assert_eq!(derived_proofs.len(), 1);
 
     // verify derived proof
     let revealed_messages0 = vec![
-        b"Message[0,0]".to_vec(), // revealed
-        b"Message[0,1]".to_vec(), // revealed
+        string_to_typed_bytes("Message[0,0]"), // revealed
+        string_to_typed_bytes("Message[0,1]"), // revealed
     ];
     let eqv0 = vec![(0, 0)]; // inconsistent equivalence class that is not given during deriveProof
     let verify_proof_request = BlsVerifyProofMultiContext {
@@ -515,6 +529,7 @@ pub async fn bls_single_invalid_equivs_test() {
         revealed: vec![revealed0],
         nonce: vec![0],
         equivs: vec![eqv0], // inconsistent equivalence class
+        range: vec![vec![]],
     };
     let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
     let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
@@ -541,6 +556,7 @@ pub async fn bls_single_verify_empty_proof_test() {
         revealed: vec![],
         nonce: vec![0],
         equivs: vec![eqv0],
+        range: vec![vec![]],
     };
     let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
     let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
@@ -557,11 +573,11 @@ pub async fn bls_multi_whole_success_test() {
     // issue credential [0]
     let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
     let messages0 = vec![
-        b"Message[0,0]".to_vec(),
-        b"Message[0,1]".to_vec(),
-        b"Message_EQ_0".to_vec(),
-        b"Message_EQ_1".to_vec(),
-        b"Message[0,4]".to_vec(),
+        string_to_typed_bytes("Message[0,0]"),
+        string_to_typed_bytes("Message[0,1]"),
+        string_to_typed_bytes("Message_EQ_0"),
+        string_to_typed_bytes("Message_EQ_1"),
+        string_to_typed_bytes("Message[0,4]"),
     ];
     let sign_request0 = BlsBbsSignRequest {
         keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
@@ -591,11 +607,11 @@ pub async fn bls_multi_whole_success_test() {
     // issue credential [1]
     let key_pair_js1 = bls_generate_g2_key(None).await.unwrap();
     let messages1 = vec![
-        b"Message[1,0]".to_vec(),
-        b"Message_EQ_1".to_vec(),
-        b"Message[1,2]".to_vec(),
-        b"Message_EQ_0".to_vec(),
-        b"Message[1,4]".to_vec(),
+        string_to_typed_bytes("Message[1,0]"),
+        string_to_typed_bytes("Message_EQ_1"),
+        string_to_typed_bytes("Message[1,2]"),
+        string_to_typed_bytes("Message_EQ_0"),
+        string_to_typed_bytes("Message[1,4]"),
     ];
     let sign_request1 = BlsBbsSignRequest {
         keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js1.clone()).unwrap(),
@@ -634,30 +650,29 @@ pub async fn bls_multi_whole_success_test() {
         revealed: vec![revealed0.clone(), revealed1.clone()],
         nonce: vec![0],
         equivs: vec![eq0, eq1],
+        range: vec![vec![], vec![]],
     };
     let derive_proof_request_js = serde_wasm_bindgen::to_value(&derive_proof_request).unwrap();
     let derived_proofs_js = bls_create_proof_multi(derive_proof_request_js).await;
     assert!(derived_proofs_js.is_ok(), "{:?}", derived_proofs_js);
-    let derived_proofs = serde_wasm_bindgen::from_value::<Vec<PoKOfSignatureProofMultiWrapper>>(
-        derived_proofs_js.unwrap(),
-    )
-    .unwrap();
+    let derived_proofs =
+        serde_wasm_bindgen::from_value::<Vec<Vec<u8>>>(derived_proofs_js.unwrap()).unwrap();
     assert_eq!(derived_proofs.len(), 2);
 
     // verify derived proofs
     let revealed_messages0 = vec![
-        b"Message[0,0]".to_vec(), // revealed
-        b"Message[0,1]".to_vec(), // revealed
-        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_0"
-        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_1"
-                                  // hidden;                        was "Message[0,4]"
+        string_to_typed_bytes("Message[0,0]"), // revealed
+        string_to_typed_bytes("Message[0,1]"), // revealed
+        string_to_typed_bytes("___DUMMY____"), // hidden with proof of equality; was "Message_EQ_0"
+        string_to_typed_bytes("___DUMMY____"), // hidden with proof of equality; was "Message_EQ_1"
+                                            // hidden;                        was "Message[0,4]"
     ];
     let revealed_messages1 = vec![
-        b"Message[1,0]".to_vec(), // revealed
-        b"___DUMMY____".to_vec(), // hidden with proof of eqaulity; was "Message_EQ_1"
-        b"Message[1,2]".to_vec(), // revealed
-        b"___DUMMY____".to_vec(), // hidden with proof of equality; was "Message_EQ_0"
-                                  // hidden;                        was "Message[1,4]"
+        string_to_typed_bytes("Message[1,0]"), // revealed
+        string_to_typed_bytes("___DUMMY____"), // hidden with proof of eqaulity; was "Message_EQ_1"
+        string_to_typed_bytes("Message[1,2]"), // revealed
+        string_to_typed_bytes("___DUMMY____"), // hidden with proof of equality; was "Message_EQ_0"
+                                            // hidden;                        was "Message[1,4]"
     ];
     let eqv0 = vec![(0, 2), (1, 3)]; // equivalence class corresponding to "Message_EQ_0"
     let eqv1 = vec![(0, 3), (1, 1)]; // equivalence class corresponding to "Message_EQ_1"
@@ -668,6 +683,7 @@ pub async fn bls_multi_whole_success_test() {
         revealed: vec![revealed0, revealed1],
         nonce: vec![0],
         equivs: vec![eqv0, eqv1],
+        range: vec![vec![], vec![]],
     };
     let verify_proof_request_js = serde_wasm_bindgen::to_value(&verify_proof_request).unwrap();
     let verify_proof_result_js = bls_verify_proof_multi(verify_proof_request_js)
