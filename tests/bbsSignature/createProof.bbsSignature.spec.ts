@@ -11,19 +11,19 @@
  * limitations under the License.
  */
 
-import { BbsCreateProofRequest, createProof, blsCreateProof } from "../../lib";
+import { BbsCreateProofRequest, createProof, blsCreateProof, blsCreateProofMulti, BbsCreateProofMultiRequest } from "../../lib";
 import { randomBytes } from "@stablelib/random";
-import { base64Decode, stringToBytes } from "../utilities";
+import { base64Decode, stringToBytes, stringToTypedBytes } from "../utilities";
 
 describe("bbsSignature", () => {
   describe("createProof", () => {
     it("should create proof revealing single message from single message signature", async () => {
-      const messages = [stringToBytes("RmtnDBJHso5iSg==")];
+      const messages = [stringToTypedBytes("RmtnDBJHso5iSg==")];
       const bbsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pboZyjM38YgjaUBcjftZi5gb58Qz13XeRJpiuUHH06I7/1Eb8oVtIW5SGMNfKaqKhBAAAAAYPPztgxfWWw01/0SSug1oLfVuI4XUqhgyZ3rS6eTkOLjnyR3ObXb0XCD2Mfcxiv6w=="
+        "uI9+d9OZ2Yzl5zMmWltuBvFjUKLs+Q9wiuTtzqZwE3tzfRwmf6aPNoBCOF2Zwyc/B3qhjwStqFDLKyy6xott9WAGTlVwwA4igwJwtXaF6jeHfkwvfbvuI155QPg+pigmgiAr/dcHklf5+4yaPpq7+SBgzUKknTYR6uC7RemOdS058q14/s/UTcyG71pvxyH5AAAAAYNH/5xWsNqf3MSYCTzFgxqrlLM+DaJYu1FP84Hb6KKzcI1RHoux8kDXBVF32StjOg=="
       );
       const signature = base64Decode(
-        "rpldJh9DkYe4FvX7WPYI+GNhBM7uB3UGg3NcJX+NTts9E5R9TtHSYszqVfLxdq0Mb45jyd82laouneFYjB5TreM5Qpo9TyO0yNPdaanmfW0wCeLp3r0bhdfOF67GGL01KHY56ojoaSWBmr2lpqRU2Q=="
+        "iEM5pyItzOv3IwS/6yYB8tvj11D0QdrcHDuPpjUAxdgHsXz05yR3UUdKRLZJKJo2YUHlKfzccE4m7waZyoLEkBLFiK2g54Q2i+CdtYBgDdkUDsoULSBMcH1MwGHwdjfXpldFNFrHFx/IAvLVniyeMQ=="
       );
 
       const request: BbsCreateProofRequest = {
@@ -41,16 +41,15 @@ describe("bbsSignature", () => {
 
     it("should create proof revealing all messages from multi-message signature", async () => {
       const messages = [
-        stringToBytes("J42AxhciOVkE9w=="),
-        stringToBytes("PNMnARWIHP+s2g=="),
-        stringToBytes("ti9WYhhEej85jw=="),
+        stringToTypedBytes("J42AxhciOVkE9w=="),
+        stringToTypedBytes("PNMnARWIHP+s2g=="),
+        stringToTypedBytes("ti9WYhhEej85jw=="),
       ];
-
       const bbsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pbiZ/pmArLDr3oSCqthKgSZw4VFzzJMFEuHP9AAnOnUJmqkOmvI1ctGLO6kCLFuwQVAAAAA4GrOHdyZEbTWRrTwIdz+KXWcEUHdIx41XSr/RK0TE5+qU7irAhQekOGFpGWQY4rYrDxoHToB4DblaJWUgkSZQLQ5sOfJg3qUJr9MpnDNJ8nNNitL65e6mqnpfsbbT3k94LBQI3/HijeRl29y5dGcLhOxldMtx2SvQg//kWOJ/Ug8e1aVo3V07XkR1Ltx76uzA=="
+        "o6kQ4DspDhUa1Cvo2//bpXBv2SlxV1fblNcRB6p+yEos8pVgivndRjUjm1nNs755Eei6/EOE0DUd8Ph1DSV9gDWwyzjj6EkVVgBRHxjMFM1z7yyOorOO2v5+vLMfazrhl6BzhSd+2k4w8mpE3VBFcwT5iszBG1546bTLjpRu7McSbA7+cCAWMxrN8ESvnWEBAAAAA6yRcDzNmw6AgAsBK4qLqRV2fWvRftGyR0j3mHb65G3cCwMLovzjP6XGOYXxr2jJkaiTzJgpIy2JcYluNORAGiHw+IYnce+xjPVW2tZsEsQaeeC+njhcM3oaFuyeQBdEOrIsiEmi0luivUovCfvqRIIC/tMrJDUoRNIk5GpQrTR/Sm9KdZogJw1eaEbiG/dIaQ=="
       );
       const signature = base64Decode(
-        "qg3PfohWGvbOCZWxcWIZ779aOuNSafjCXLdDux01TTNGm/Uqhr/kZZ1wSmxKwbEWAhctrDCp2mGE0M0l6DlA5R38chMbtnyWMfQgbQpzMQZgPBPUvVWivJyYEysZnQWrAYzZzRPe36VFbFy5ynWx0w=="
+        "hF4nqu92D5Ur+2YYeRnEFIs6TdSrCFf4blUOU5nmndtqv+3quh5nssksfE/APTSnMKVg9X44OT7IyqxonIH7xLuNJjBkG7KYma9urLMBCo4x5JoTWPaG1p7URXapIpy1ng+avITVXJin9XQoxPxyNA=="
       );
 
       const request: BbsCreateProofRequest = {
@@ -68,16 +67,15 @@ describe("bbsSignature", () => {
 
     it("should create proof revealing single message from multi-message signature", async () => {
       const messages = [
-        stringToBytes("J42AxhciOVkE9w=="),
-        stringToBytes("PNMnARWIHP+s2g=="),
-        stringToBytes("ti9WYhhEej85jw=="),
+        stringToTypedBytes("J42AxhciOVkE9w=="),
+        stringToTypedBytes("PNMnARWIHP+s2g=="),
+        stringToTypedBytes("ti9WYhhEej85jw=="),
       ];
-
       const bbsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pbiZ/pmArLDr3oSCqthKgSZw4VFzzJMFEuHP9AAnOnUJmqkOmvI1ctGLO6kCLFuwQVAAAAA4GrOHdyZEbTWRrTwIdz+KXWcEUHdIx41XSr/RK0TE5+qU7irAhQekOGFpGWQY4rYrDxoHToB4DblaJWUgkSZQLQ5sOfJg3qUJr9MpnDNJ8nNNitL65e6mqnpfsbbT3k94LBQI3/HijeRl29y5dGcLhOxldMtx2SvQg//kWOJ/Ug8e1aVo3V07XkR1Ltx76uzA=="
+        "o6kQ4DspDhUa1Cvo2//bpXBv2SlxV1fblNcRB6p+yEos8pVgivndRjUjm1nNs755Eei6/EOE0DUd8Ph1DSV9gDWwyzjj6EkVVgBRHxjMFM1z7yyOorOO2v5+vLMfazrhl6BzhSd+2k4w8mpE3VBFcwT5iszBG1546bTLjpRu7McSbA7+cCAWMxrN8ESvnWEBAAAAA6yRcDzNmw6AgAsBK4qLqRV2fWvRftGyR0j3mHb65G3cCwMLovzjP6XGOYXxr2jJkaiTzJgpIy2JcYluNORAGiHw+IYnce+xjPVW2tZsEsQaeeC+njhcM3oaFuyeQBdEOrIsiEmi0luivUovCfvqRIIC/tMrJDUoRNIk5GpQrTR/Sm9KdZogJw1eaEbiG/dIaQ=="
       );
       const signature = base64Decode(
-        "qg3PfohWGvbOCZWxcWIZ779aOuNSafjCXLdDux01TTNGm/Uqhr/kZZ1wSmxKwbEWAhctrDCp2mGE0M0l6DlA5R38chMbtnyWMfQgbQpzMQZgPBPUvVWivJyYEysZnQWrAYzZzRPe36VFbFy5ynWx0w=="
+        "hF4nqu92D5Ur+2YYeRnEFIs6TdSrCFf4blUOU5nmndtqv+3quh5nssksfE/APTSnMKVg9X44OT7IyqxonIH7xLuNJjBkG7KYma9urLMBCo4x5JoTWPaG1p7URXapIpy1ng+avITVXJin9XQoxPxyNA=="
       );
 
       const request: BbsCreateProofRequest = {
@@ -95,16 +93,16 @@ describe("bbsSignature", () => {
 
     it("should create proof revealing multiple messages from multi-message signature", async () => {
       const messages = [
-        stringToBytes("J42AxhciOVkE9w=="),
-        stringToBytes("PNMnARWIHP+s2g=="),
-        stringToBytes("ti9WYhhEej85jw=="),
+        stringToTypedBytes("J42AxhciOVkE9w=="),
+        stringToTypedBytes("PNMnARWIHP+s2g=="),
+        stringToTypedBytes("ti9WYhhEej85jw=="),
       ];
 
       const bbsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pbiZ/pmArLDr3oSCqthKgSZw4VFzzJMFEuHP9AAnOnUJmqkOmvI1ctGLO6kCLFuwQVAAAAA4GrOHdyZEbTWRrTwIdz+KXWcEUHdIx41XSr/RK0TE5+qU7irAhQekOGFpGWQY4rYrDxoHToB4DblaJWUgkSZQLQ5sOfJg3qUJr9MpnDNJ8nNNitL65e6mqnpfsbbT3k94LBQI3/HijeRl29y5dGcLhOxldMtx2SvQg//kWOJ/Ug8e1aVo3V07XkR1Ltx76uzA=="
+        "o6kQ4DspDhUa1Cvo2//bpXBv2SlxV1fblNcRB6p+yEos8pVgivndRjUjm1nNs755Eei6/EOE0DUd8Ph1DSV9gDWwyzjj6EkVVgBRHxjMFM1z7yyOorOO2v5+vLMfazrhl6BzhSd+2k4w8mpE3VBFcwT5iszBG1546bTLjpRu7McSbA7+cCAWMxrN8ESvnWEBAAAAA6yRcDzNmw6AgAsBK4qLqRV2fWvRftGyR0j3mHb65G3cCwMLovzjP6XGOYXxr2jJkaiTzJgpIy2JcYluNORAGiHw+IYnce+xjPVW2tZsEsQaeeC+njhcM3oaFuyeQBdEOrIsiEmi0luivUovCfvqRIIC/tMrJDUoRNIk5GpQrTR/Sm9KdZogJw1eaEbiG/dIaQ=="
       );
       const signature = base64Decode(
-        "qg3PfohWGvbOCZWxcWIZ779aOuNSafjCXLdDux01TTNGm/Uqhr/kZZ1wSmxKwbEWAhctrDCp2mGE0M0l6DlA5R38chMbtnyWMfQgbQpzMQZgPBPUvVWivJyYEysZnQWrAYzZzRPe36VFbFy5ynWx0w=="
+        "hF4nqu92D5Ur+2YYeRnEFIs6TdSrCFf4blUOU5nmndtqv+3quh5nssksfE/APTSnMKVg9X44OT7IyqxonIH7xLuNJjBkG7KYma9urLMBCo4x5JoTWPaG1p7URXapIpy1ng+avITVXJin9XQoxPxyNA=="
       );
 
       const request: BbsCreateProofRequest = {
@@ -122,17 +120,17 @@ describe("bbsSignature", () => {
 
     it("should fail to create proof when attempting to create one with an unsigned extra message", async () => {
       const messages = [
-        stringToBytes("J42AxhciOVkE9w=="),
-        stringToBytes("PNMnARWIHP+s2g=="),
-        stringToBytes("ti9WYhhEej85jw=="),
-        stringToBytes("badmessagex01a=="),
+        stringToTypedBytes("J42AxhciOVkE9w=="),
+        stringToTypedBytes("PNMnARWIHP+s2g=="),
+        stringToTypedBytes("ti9WYhhEej85jw=="),
+        stringToTypedBytes("badmessagex01a=="),
       ];
 
       const bbsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pbiZ/pmArLDr3oSCqthKgSZw4VFzzJMFEuHP9AAnOnUJmqkOmvI1ctGLO6kCLFuwQVAAAAA4GrOHdyZEbTWRrTwIdz+KXWcEUHdIx41XSr/RK0TE5+qU7irAhQekOGFpGWQY4rYrDxoHToB4DblaJWUgkSZQLQ5sOfJg3qUJr9MpnDNJ8nNNitL65e6mqnpfsbbT3k94LBQI3/HijeRl29y5dGcLhOxldMtx2SvQg//kWOJ/Ug8e1aVo3V07XkR1Ltx76uzA=="
+        "o6kQ4DspDhUa1Cvo2//bpXBv2SlxV1fblNcRB6p+yEos8pVgivndRjUjm1nNs755Eei6/EOE0DUd8Ph1DSV9gDWwyzjj6EkVVgBRHxjMFM1z7yyOorOO2v5+vLMfazrhl6BzhSd+2k4w8mpE3VBFcwT5iszBG1546bTLjpRu7McSbA7+cCAWMxrN8ESvnWEBAAAAA6yRcDzNmw6AgAsBK4qLqRV2fWvRftGyR0j3mHb65G3cCwMLovzjP6XGOYXxr2jJkaiTzJgpIy2JcYluNORAGiHw+IYnce+xjPVW2tZsEsQaeeC+njhcM3oaFuyeQBdEOrIsiEmi0luivUovCfvqRIIC/tMrJDUoRNIk5GpQrTR/Sm9KdZogJw1eaEbiG/dIaQ=="
       );
       const signature = base64Decode(
-        "qg3PfohWGvbOCZWxcWIZ779aOuNSafjCXLdDux01TTNGm/Uqhr/kZZ1wSmxKwbEWAhctrDCp2mGE0M0l6DlA5R38chMbtnyWMfQgbQpzMQZgPBPUvVWivJyYEysZnQWrAYzZzRPe36VFbFy5ynWx0w=="
+        "hF4nqu92D5Ur+2YYeRnEFIs6TdSrCFf4blUOU5nmndtqv+3quh5nssksfE/APTSnMKVg9X44OT7IyqxonIH7xLuNJjBkG7KYma9urLMBCo4x5JoTWPaG1p7URXapIpy1ng+avITVXJin9XQoxPxyNA=="
       );
 
       const request: BbsCreateProofRequest = {
@@ -150,16 +148,16 @@ describe("bbsSignature", () => {
 
     it("should fail to create proof when attempting to create one with a modified message", async () => {
       const messages = [
-        stringToBytes("badmessagex01a=="),
-        stringToBytes("PNMnARWIHP+s2g=="),
-        stringToBytes("ti9WYhhEej85jw=="),
+        stringToTypedBytes("badmessagex01a=="),
+        stringToTypedBytes("PNMnARWIHP+s2g=="),
+        stringToTypedBytes("ti9WYhhEej85jw=="),
       ];
 
       const bbsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pbiZ/pmArLDr3oSCqthKgSZw4VFzzJMFEuHP9AAnOnUJmqkOmvI1ctGLO6kCLFuwQVAAAAA4GrOHdyZEbTWRrTwIdz+KXWcEUHdIx41XSr/RK0TE5+qU7irAhQekOGFpGWQY4rYrDxoHToB4DblaJWUgkSZQLQ5sOfJg3qUJr9MpnDNJ8nNNitL65e6mqnpfsbbT3k94LBQI3/HijeRl29y5dGcLhOxldMtx2SvQg//kWOJ/Ug8e1aVo3V07XkR1Ltx76uzA=="
+        "o6kQ4DspDhUa1Cvo2//bpXBv2SlxV1fblNcRB6p+yEos8pVgivndRjUjm1nNs755Eei6/EOE0DUd8Ph1DSV9gDWwyzjj6EkVVgBRHxjMFM1z7yyOorOO2v5+vLMfazrhl6BzhSd+2k4w8mpE3VBFcwT5iszBG1546bTLjpRu7McSbA7+cCAWMxrN8ESvnWEBAAAAA6yRcDzNmw6AgAsBK4qLqRV2fWvRftGyR0j3mHb65G3cCwMLovzjP6XGOYXxr2jJkaiTzJgpIy2JcYluNORAGiHw+IYnce+xjPVW2tZsEsQaeeC+njhcM3oaFuyeQBdEOrIsiEmi0luivUovCfvqRIIC/tMrJDUoRNIk5GpQrTR/Sm9KdZogJw1eaEbiG/dIaQ=="
       );
       const signature = base64Decode(
-        "qg3PfohWGvbOCZWxcWIZ779aOuNSafjCXLdDux01TTNGm/Uqhr/kZZ1wSmxKwbEWAhctrDCp2mGE0M0l6DlA5R38chMbtnyWMfQgbQpzMQZgPBPUvVWivJyYEysZnQWrAYzZzRPe36VFbFy5ynWx0w=="
+        "hF4nqu92D5Ur+2YYeRnEFIs6TdSrCFf4blUOU5nmndtqv+3quh5nssksfE/APTSnMKVg9X44OT7IyqxonIH7xLuNJjBkG7KYma9urLMBCo4x5JoTWPaG1p7URXapIpy1ng+avITVXJin9XQoxPxyNA=="
       );
 
       const request: BbsCreateProofRequest = {
@@ -177,15 +175,15 @@ describe("bbsSignature", () => {
 
     it("should fail to create proof when attempting to create one with missing messages", async () => {
       const messages = [
-        stringToBytes("badmessagex01a=="),
-        stringToBytes("PNMnARWIHP+s2g=="),
+        stringToTypedBytes("badmessagex01a=="),
+        stringToTypedBytes("PNMnARWIHP+s2g=="),
       ];
 
       const bbsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pbiZ/pmArLDr3oSCqthKgSZw4VFzzJMFEuHP9AAnOnUJmqkOmvI1ctGLO6kCLFuwQVAAAAA4GrOHdyZEbTWRrTwIdz+KXWcEUHdIx41XSr/RK0TE5+qU7irAhQekOGFpGWQY4rYrDxoHToB4DblaJWUgkSZQLQ5sOfJg3qUJr9MpnDNJ8nNNitL65e6mqnpfsbbT3k94LBQI3/HijeRl29y5dGcLhOxldMtx2SvQg//kWOJ/Ug8e1aVo3V07XkR1Ltx76uzA=="
+        "o6kQ4DspDhUa1Cvo2//bpXBv2SlxV1fblNcRB6p+yEos8pVgivndRjUjm1nNs755Eei6/EOE0DUd8Ph1DSV9gDWwyzjj6EkVVgBRHxjMFM1z7yyOorOO2v5+vLMfazrhl6BzhSd+2k4w8mpE3VBFcwT5iszBG1546bTLjpRu7McSbA7+cCAWMxrN8ESvnWEBAAAAA6yRcDzNmw6AgAsBK4qLqRV2fWvRftGyR0j3mHb65G3cCwMLovzjP6XGOYXxr2jJkaiTzJgpIy2JcYluNORAGiHw+IYnce+xjPVW2tZsEsQaeeC+njhcM3oaFuyeQBdEOrIsiEmi0luivUovCfvqRIIC/tMrJDUoRNIk5GpQrTR/Sm9KdZogJw1eaEbiG/dIaQ=="
       );
       const signature = base64Decode(
-        "qg3PfohWGvbOCZWxcWIZ779aOuNSafjCXLdDux01TTNGm/Uqhr/kZZ1wSmxKwbEWAhctrDCp2mGE0M0l6DlA5R38chMbtnyWMfQgbQpzMQZgPBPUvVWivJyYEysZnQWrAYzZzRPe36VFbFy5ynWx0w=="
+        "hF4nqu92D5Ur+2YYeRnEFIs6TdSrCFf4blUOU5nmndtqv+3quh5nssksfE/APTSnMKVg9X44OT7IyqxonIH7xLuNJjBkG7KYma9urLMBCo4x5JoTWPaG1p7URXapIpy1ng+avITVXJin9XQoxPxyNA=="
       );
 
       const request: BbsCreateProofRequest = {
@@ -203,16 +201,16 @@ describe("bbsSignature", () => {
 
     it("should fail to create proof when attempting to create one with messages supplied in wrong order", async () => {
       const messages = [
-        stringToBytes("ti9WYhhEej85jw=="),
-        stringToBytes("PNMnARWIHP+s2g=="),
-        stringToBytes("J42AxhciOVkE9w=="),
+        stringToTypedBytes("ti9WYhhEej85jw=="),
+        stringToTypedBytes("PNMnARWIHP+s2g=="),
+        stringToTypedBytes("J42AxhciOVkE9w=="),
       ];
 
       const bbsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pbiZ/pmArLDr3oSCqthKgSZw4VFzzJMFEuHP9AAnOnUJmqkOmvI1ctGLO6kCLFuwQVAAAAA4GrOHdyZEbTWRrTwIdz+KXWcEUHdIx41XSr/RK0TE5+qU7irAhQekOGFpGWQY4rYrDxoHToB4DblaJWUgkSZQLQ5sOfJg3qUJr9MpnDNJ8nNNitL65e6mqnpfsbbT3k94LBQI3/HijeRl29y5dGcLhOxldMtx2SvQg//kWOJ/Ug8e1aVo3V07XkR1Ltx76uzA=="
+        "o6kQ4DspDhUa1Cvo2//bpXBv2SlxV1fblNcRB6p+yEos8pVgivndRjUjm1nNs755Eei6/EOE0DUd8Ph1DSV9gDWwyzjj6EkVVgBRHxjMFM1z7yyOorOO2v5+vLMfazrhl6BzhSd+2k4w8mpE3VBFcwT5iszBG1546bTLjpRu7McSbA7+cCAWMxrN8ESvnWEBAAAAA6yRcDzNmw6AgAsBK4qLqRV2fWvRftGyR0j3mHb65G3cCwMLovzjP6XGOYXxr2jJkaiTzJgpIy2JcYluNORAGiHw+IYnce+xjPVW2tZsEsQaeeC+njhcM3oaFuyeQBdEOrIsiEmi0luivUovCfvqRIIC/tMrJDUoRNIk5GpQrTR/Sm9KdZogJw1eaEbiG/dIaQ=="
       );
       const signature = base64Decode(
-        "qg3PfohWGvbOCZWxcWIZ779aOuNSafjCXLdDux01TTNGm/Uqhr/kZZ1wSmxKwbEWAhctrDCp2mGE0M0l6DlA5R38chMbtnyWMfQgbQpzMQZgPBPUvVWivJyYEysZnQWrAYzZzRPe36VFbFy5ynWx0w=="
+        "hF4nqu92D5Ur+2YYeRnEFIs6TdSrCFf4blUOU5nmndtqv+3quh5nssksfE/APTSnMKVg9X44OT7IyqxonIH7xLuNJjBkG7KYma9urLMBCo4x5JoTWPaG1p7URXapIpy1ng+avITVXJin9XQoxPxyNA=="
       );
 
       const request: BbsCreateProofRequest = {
@@ -229,214 +227,275 @@ describe("bbsSignature", () => {
     });
   });
 
-  describe("blsCreateProof", () => {
+  describe("blsCreateProofMulti", () => {
     it("should create proof revealing single message from single message signature", async () => {
-      const messages = [stringToBytes("uzAoQFqLgReidw==")];
-      const blsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pb"
-      );
-      const signature = base64Decode(
-        "r00WeXEj+07DUZb3JY6fbbKhHtQcxtLZsJUVU6liFZQKCLQYu77EXFZx4Vaa5VBtKpPK6tDGovHGgrgyizOm70VUZgzzBb0emvRIGSWhAKkcLL1z1HYwApnUE6XFFb96LUF4XM//QhEM774dX4ciqQ=="
-      );
+      const messages = [
+        [stringToTypedBytes("uzAoQFqLgReidw==")]
+      ];
+      const blsPublicKey = [
+        base64Decode(
+          "gPz23LHQrxwlZJpeAuPKou582/+mIJ0+TYmoOBWRGqcGvx2o9aRID/umqLs+tfc9Cf0Hl7w2zzpOPAuhV22nnIRBIS2JNgKPtkoZ3HWC/rF10GzWTbHWIQkqKDvepxX9"
+        )
+      ];
+      const signature = [
+        base64Decode(
+          "rqd9lDf2BfHlZ5VMn6Ixf2LuiW6UsChG29S/Qsf6suSDxUil3cZp6ktFhHDd2TedJmSZEgbMbmoURRP0yJmkF+5Rb6RW7j+exRwVndypfDNB/rZ0lrbolzuxr6bvm7HAznsGewibBG0pA8zdMyiI5g=="
+        )
+      ];
 
-      const request: BbsCreateProofRequest = {
+      const request: BbsCreateProofMultiRequest = {
         signature,
         publicKey: blsPublicKey,
         messages,
         nonce: stringToBytes("0123456789"),
-        revealed: [0],
+        revealed: [[0]],
+        equivs: [],
+        range: [[]],
       };
 
-      const proof = await blsCreateProof(request);
-      expect(proof).toBeInstanceOf(Uint8Array);
-      expect(proof.length).toEqual(383);
+      const proof = await blsCreateProofMulti(request);
+      expect(proof.length).toEqual(1);
+      expect(proof[0]).toBeInstanceOf(Array);
+      expect(proof[0].length).toEqual(389);
     });
 
     it("should create proof revealing all messages from multi-message signature", async () => {
       const messages = [
-        stringToBytes("C+n1rPz1/tVzPg=="),
-        stringToBytes("h3x8cbySqC4rLA=="),
-        stringToBytes("MGf74ofGdRwNbw=="),
+        [
+          stringToTypedBytes("C+n1rPz1/tVzPg=="),
+          stringToTypedBytes("h3x8cbySqC4rLA=="),
+          stringToTypedBytes("MGf74ofGdRwNbw=="),
+        ]
+      ];
+      const blsPublicKey = [
+        base64Decode(
+          "uYrCIgmn8ljb0IGqZTZq2P0YEQWRzl7xcoMmLtGkxa/8JTtPuT81RMIkGulVLj8yBUoB/iMu+7co0HdW0DWzHPQgy257MESx298xFG6uB6KBfWK083g0WCLB+QB4Q7rM"
+        )
+      ];
+      const signature = [
+        base64Decode(
+          "qxSZGJTrx19EZoZPMWzfc/7J/qcfO7HWKOOAXU7r070LAlqZrOMOp12alo+JRlMsIGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
+        )
       ];
 
-      const blsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pb"
-      );
-      const signature = base64Decode(
-        "uISPYALbiNZwIgu1ndj9onUbkFA9trrhGFQJqJHFOSWCZYAIDUNTysXziar6+MdbPEiJS34OOlKAzxxnxIhFW0lBd4dbLOKf59LZPMRYc91tALAZeriyKcSVa7RzZl50UPjHfs31JrH6RgZ1V9/OVg=="
-      );
-
-      const request: BbsCreateProofRequest = {
+      const request: BbsCreateProofMultiRequest = {
         signature,
         publicKey: blsPublicKey,
         messages,
         nonce: randomBytes(10),
-        revealed: [0, 1, 2],
+        revealed: [[0, 1, 2]],
+        equivs: [],
+        range: [[]],
       };
 
-      const proof = await blsCreateProof(request);
-      expect(proof).toBeInstanceOf(Uint8Array);
-      expect(proof.length).toEqual(383); //TODO add a reason for this and some constants?
+      const proof = await blsCreateProofMulti(request);
+      expect(proof.length).toEqual(1);
+      expect(proof[0]).toBeInstanceOf(Array);
+      expect(proof[0].length).toEqual(389); //TODO add a reason for this and some constants?
     });
 
     it("should create proof revealing single message from multi-message signature", async () => {
       const messages = [
-        stringToBytes("uiSKIfNoO2rMrA=="),
-        stringToBytes("lMoHHrFx0LxwAw=="),
-        stringToBytes("wdwqLVm9chMMnA=="),
+        [
+          stringToTypedBytes("uiSKIfNoO2rMrA=="),
+          stringToTypedBytes("lMoHHrFx0LxwAw=="),
+          stringToTypedBytes("wdwqLVm9chMMnA=="),
+        ]
+      ];
+      const blsPublicKey = [
+        base64Decode(
+          "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
+        )
+      ];
+      const signature = [
+        base64Decode(
+          "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
+        )
       ];
 
-      const blsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pb"
-      );
-      const signature = base64Decode(
-        "jU9tKKvDDqoSUTMPDGfw/1GlnOnRD56wEM2iftL7NPBlT3JxP2YY5SnR32nra0bmR//r8JH7fvgYuqpXHJB+vsYj7xoeyQtvoPZArti0YiYML2utQmsV4zN1W0sWH7+myPL/7H/m6PgxL/CjYzAaRg=="
-      );
-
-      const request: BbsCreateProofRequest = {
+      const request: BbsCreateProofMultiRequest = {
         signature,
         publicKey: blsPublicKey,
         messages,
         nonce: randomBytes(10),
-        revealed: [0],
+        revealed: [[0]],
+        equivs: [],
+        range: [[]],
       };
 
-      const proof = await blsCreateProof(request);
-      expect(proof).toBeInstanceOf(Uint8Array);
-      expect(proof.length).toEqual(447); //TODO add a reason for this and some constants?
+      const proof = await blsCreateProofMulti(request);
+      expect(proof.length).toEqual(1);
+      expect(proof[0]).toBeInstanceOf(Array);
+      expect(proof[0].length).toEqual(453); //TODO add a reason for this and some constants?
     });
 
     it("should create proof revealing multiple messages from multi-message signature", async () => {
       const messages = [
-        stringToBytes("uiSKIfNoO2rMrA=="),
-        stringToBytes("lMoHHrFx0LxwAw=="),
-        stringToBytes("wdwqLVm9chMMnA=="),
+        [
+          stringToTypedBytes("uiSKIfNoO2rMrA=="),
+          stringToTypedBytes("lMoHHrFx0LxwAw=="),
+          stringToTypedBytes("wdwqLVm9chMMnA=="),
+        ]
+      ];
+      const blsPublicKey = [
+        base64Decode(
+          "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
+        )
+      ];
+      const signature = [
+        base64Decode(
+          "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
+        )
       ];
 
-      const blsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pb"
-      );
-      const signature = base64Decode(
-        "jU9tKKvDDqoSUTMPDGfw/1GlnOnRD56wEM2iftL7NPBlT3JxP2YY5SnR32nra0bmR//r8JH7fvgYuqpXHJB+vsYj7xoeyQtvoPZArti0YiYML2utQmsV4zN1W0sWH7+myPL/7H/m6PgxL/CjYzAaRg=="
-      );
-
-      const request: BbsCreateProofRequest = {
+      const request: BbsCreateProofMultiRequest = {
         signature,
         publicKey: blsPublicKey,
         messages,
         nonce: randomBytes(10),
-        revealed: [0, 2],
+        revealed: [[0, 2]],
+        equivs: [],
+        range: [[]],
       };
 
-      const proof = await blsCreateProof(request);
-      expect(proof).toBeInstanceOf(Uint8Array);
-      expect(proof.length).toEqual(415); //TODO evaluate this length properly add a reason for this and some constants?
+      const proof = await blsCreateProofMulti(request);
+      expect(proof.length).toEqual(1);
+      expect(proof[0]).toBeInstanceOf(Array);
+      expect(proof[0].length).toEqual(421); //TODO evaluate this length properly add a reason for this and some constants?
     });
 
     it("should fail to create proof when attempting to create one with an unsigned extra message", async () => {
       const messages = [
-        stringToBytes("uiSKIfNoO2rMrA=="),
-        stringToBytes("lMoHHrFx0LxwAw=="),
-        stringToBytes("wdwqLVm9chMMnA=="),
-        stringToBytes("badmessagex01a=="),
+        [
+          stringToTypedBytes("uiSKIfNoO2rMrA=="),
+          stringToTypedBytes("lMoHHrFx0LxwAw=="),
+          stringToTypedBytes("wdwqLVm9chMMnA=="),
+          stringToTypedBytes("badmessagex01a=="),
+        ]
+      ];
+      const blsPublicKey = [
+        base64Decode(
+          "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
+        )
+      ];
+      const signature = [
+        base64Decode(
+          "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
+        )
       ];
 
-      const blsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pb"
-      );
-      const signature = base64Decode(
-        "jU9tKKvDDqoSUTMPDGfw/1GlnOnRD56wEM2iftL7NPBlT3JxP2YY5SnR32nra0bmR//r8JH7fvgYuqpXHJB+vsYj7xoeyQtvoPZArti0YiYML2utQmsV4zN1W0sWH7+myPL/7H/m6PgxL/CjYzAaRg=="
-      );
-
-      const request: BbsCreateProofRequest = {
+      const request: BbsCreateProofMultiRequest = {
         signature,
         publicKey: blsPublicKey,
         messages,
         nonce: randomBytes(10),
-        revealed: [0, 1, 2, 3],
+        revealed: [[0, 1, 2, 3]],
+        equivs: [],
+        range: [[]],
       };
 
-      await expect(createProof(request)).rejects.toThrowError(
+      await expect(blsCreateProofMulti(request)).rejects.toThrowError(
         "Failed to create proof"
       );
     });
 
     it("should fail to create proof when attempting to create one with a modified message", async () => {
       const messages = [
-        stringToBytes("badmessagex01a=="),
-        stringToBytes("lMoHHrFx0LxwAw=="),
-        stringToBytes("wdwqLVm9chMMnA=="),
+        [
+          stringToTypedBytes("badmessagex01a=="),
+          stringToTypedBytes("lMoHHrFx0LxwAw=="),
+          stringToTypedBytes("wdwqLVm9chMMnA=="),
+        ]
+      ];
+      const blsPublicKey = [
+        base64Decode(
+          "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
+        )
+      ];
+      const signature = [
+        base64Decode(
+          "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
+        )
       ];
 
-      const blsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pb"
-      );
-      const signature = base64Decode(
-        "jU9tKKvDDqoSUTMPDGfw/1GlnOnRD56wEM2iftL7NPBlT3JxP2YY5SnR32nra0bmR//r8JH7fvgYuqpXHJB+vsYj7xoeyQtvoPZArti0YiYML2utQmsV4zN1W0sWH7+myPL/7H/m6PgxL/CjYzAaRg=="
-      );
-
-      const request: BbsCreateProofRequest = {
+      const request: BbsCreateProofMultiRequest = {
         signature,
         publicKey: blsPublicKey,
         messages,
         nonce: randomBytes(10),
-        revealed: [0],
+        revealed: [[0]],
+        equivs: [],
+        range: [[]],
       };
 
-      await expect(createProof(request)).rejects.toThrowError(
+      await expect(blsCreateProofMulti(request)).rejects.toThrowError(
         "Failed to create proof"
       );
     });
 
     it("should fail to create proof when attempting to create one with missing messages", async () => {
       const messages = [
-        stringToBytes("lMoHHrFx0LxwAw=="),
-        stringToBytes("wdwqLVm9chMMnA=="),
+        [
+          stringToTypedBytes("lMoHHrFx0LxwAw=="),
+          stringToTypedBytes("wdwqLVm9chMMnA=="),
+        ]
+      ];
+      const blsPublicKey = [
+        base64Decode(
+          "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
+        )
+      ];
+      const signature = [
+        base64Decode(
+          "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
+        )
       ];
 
-      const blsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pb"
-      );
-      const signature = base64Decode(
-        "jU9tKKvDDqoSUTMPDGfw/1GlnOnRD56wEM2iftL7NPBlT3JxP2YY5SnR32nra0bmR//r8JH7fvgYuqpXHJB+vsYj7xoeyQtvoPZArti0YiYML2utQmsV4zN1W0sWH7+myPL/7H/m6PgxL/CjYzAaRg=="
-      );
-
-      const request: BbsCreateProofRequest = {
+      const request: BbsCreateProofMultiRequest = {
         signature,
         publicKey: blsPublicKey,
         messages,
         nonce: randomBytes(10),
-        revealed: [0],
+        revealed: [[0]],
+        equivs: [],
+        range: [[]],
       };
 
-      await expect(createProof(request)).rejects.toThrowError(
+      await expect(blsCreateProofMulti(request)).rejects.toThrowError(
         "Failed to create proof"
       );
     });
 
     it("should fail to create proof when attempting to create one with a modified message", async () => {
       const messages = [
-        stringToBytes("wdwqLVm9chMMnA=="),
-        stringToBytes("lMoHHrFx0LxwAw=="),
-        stringToBytes("uiSKIfNoO2rMrA=="),
+        [
+          stringToTypedBytes("wdwqLVm9chMMnA=="),
+          stringToTypedBytes("lMoHHrFx0LxwAw=="),
+          stringToTypedBytes("uiSKIfNoO2rMrA=="),
+        ]
+      ];
+      const blsPublicKey = [
+        base64Decode(
+          "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
+        )
+      ];
+      const signature = [
+        base64Decode(
+          "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
+        )
       ];
 
-      const blsPublicKey = base64Decode(
-        "qJgttTOthlZHltz+c0PE07hx3worb/cy7QY5iwRegQ9BfwvGahdqCO9Q9xuOnF5nD/Tq6t8zm9z26EAFCiaEJnL5b50D1cHDgNxBUPEEae+4bUb3JRsHaxBdZWDOo3pb"
-      );
-      const signature = base64Decode(
-        "jU9tKKvDDqoSUTMPDGfw/1GlnOnRD56wEM2iftL7NPBlT3JxP2YY5SnR32nra0bmR//r8JH7fvgYuqpXHJB+vsYj7xoeyQtvoPZArti0YiYML2utQmsV4zN1W0sWH7+myPL/7H/m6PgxL/CjYzAaRg=="
-      );
-
-      const request: BbsCreateProofRequest = {
+      const request: BbsCreateProofMultiRequest = {
         signature,
         publicKey: blsPublicKey,
         messages,
         nonce: randomBytes(10),
-        revealed: [0],
+        revealed: [[0]],
+        equivs: [],
+        range: [[]],
       };
 
-      await expect(createProof(request)).rejects.toThrowError(
+      await expect(blsCreateProofMulti(request)).rejects.toThrowError(
         "Failed to create proof"
       );
     });
