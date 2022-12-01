@@ -19,9 +19,9 @@ use arrayref::array_ref;
 use bbs::{prelude::*, signature::BlindSignature};
 use std::convert::TryInto;
 use wasm::prelude::*;
+use wasm::U8_STRING;
 use wasm_bindgen_test::*;
 
-use wasm::U8_STRING;
 fn string_to_typed_bytes(message: &str) -> Vec<u8> {
     let mut bytes = vec![U8_STRING];
     bytes.extend(message.as_bytes());
