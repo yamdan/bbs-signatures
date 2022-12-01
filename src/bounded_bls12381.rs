@@ -10,7 +10,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use crate::{prelude::BlsKeyPair, utils::set_panic_hook};
+use crate::{gen_signature_message, prelude::BlsKeyPair, utils::set_panic_hook};
 
 use bbs::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -21,7 +21,7 @@ use std::{
 use wasm_bindgen::prelude::*;
 
 wasm_impl!(
-    BoundedBlsBignatureRequestContextRequest,
+    BoundedBlsSignatureRequestContextRequest,
     issuerPublicKey: Vec<u8>,
     proverSecretKey: Vec<u8>,
     messageCount: usize,
@@ -64,7 +64,7 @@ wasm_impl!(
 #[wasm_bindgen(js_name = boundedBlsSignatureRequest)]
 pub async fn bounded_bls_signature_request(request: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
-    let request: BoundedBlsBignatureRequestContextRequest = request.try_into()?;
+    let request: BoundedBlsSignatureRequestContextRequest = request.try_into()?;
     let dpk_bytes = request.issuerPublicKey;
     let dpk = DeterministicPublicKey::from(array_ref![dpk_bytes, 0, G2_COMPRESSED_SIZE]);
 
@@ -145,12 +145,10 @@ pub async fn bounded_bls_sign(request: JsValue) -> Result<JsValue, JsValue> {
 
     let mut messages: BTreeMap<usize, SignatureMessage> = BTreeMap::new();
     for (i, msg) in request.messages.iter().enumerate() {
-        // TODO: asking to @yamdan
-        // match gen_signature_message(msg) {
-        //     Err(_) => return Err(JsValue::from_str("Failed to generate signature message")),
-        //     Ok(m) => messages.insert(i, m),
-        // };
-        messages.insert(i, SignatureMessage::hash(msg));
+        match gen_signature_message(msg) {
+            Err(_) => return Err(JsValue::from_str("Failed to generate signature message")),
+            Ok(m) => messages.insert(i, m),
+        };
     }
 
     match BlindSignature::new(
