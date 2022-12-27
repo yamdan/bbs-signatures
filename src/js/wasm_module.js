@@ -140,3 +140,23 @@ module.exports.blsVerifyProofMulti = async (request) => {
   await initialize();
   return await throwErrorOnRejectedPromise(wasm.blsVerifyProofMulti(request));
 };
+
+module.exports.boundedBlsSignatureRequest = async (request) => {
+  await initialize();
+  return await throwErrorOnRejectedPromise(wasm.boundedBlsSignatureRequest(request));
+};
+
+module.exports.verifyBoundedBlsSignatureRequest = async (request) => {
+  await initialize();
+  return await throwErrorOnRejectedPromise(wasm.verifyBoundedBlsSignatureRequest(request));
+};
+
+module.exports.boundedBlsSign = async (request) => {
+  await initialize();
+  return await throwErrorOnRejectedPromise(wasm.boundedBlsSign(request));
+};
+
+module.exports.unblindBoundedBlsSignature = async (request) => {
+  await initialize();
+  return await throwErrorOnRejectedPromise(wasm.unblindBoundedBlsSignature(request));
+};
