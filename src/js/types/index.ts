@@ -31,3 +31,8 @@ export { BlsBbsVerifyRequest } from "./BlsBbsVerifyRequest";
 export { BbsVerifyResult } from "./BbsVerifyResult";
 export { BbsCreateProofMultiRequest } from "./BbsCreateProofMultiRequest";
 export { BbsVerifyProofMultiRequest } from "./BbsVerifyProofMultiRequest";
+export { BoundedBlsSignatureRequestContext } from "./BoundedBlsSignatureRequestContext";
+export { BoundedBlsSignatureRequestContextRequest } from "./BoundedBlsSignatureRequestContextRequest";
+export { BoundedBlsSignatureVerifyContextRequest } from "./BoundedBlsSignatureVerifyContextRequest";
+export { BoundedBlsSignContextRequest } from "./BoundedBlsSignContextRequest";
+export { UnblindBoundedSignatureRequest } from "./UnblindBoundedSignatureRequest";
