@@ -53,7 +53,7 @@ describe("boundedBbsSignature", () => {
         nonce: stringToBytes("0123456789"),
       };
       const vResponse = await verifyBoundedBlsSignatureRequest(vRequest);
-      expect(vResponse).toBeTruthy();
+      expect(vResponse.verified).toBeTruthy();
     });
   });
 

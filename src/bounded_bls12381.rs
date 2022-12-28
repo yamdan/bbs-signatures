@@ -10,7 +10,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use crate::{gen_signature_message, prelude::BlsKeyPair, utils::set_panic_hook};
+use crate::{gen_signature_message, prelude::BlsKeyPair, utils::set_panic_hook, BbsVerifyResponse};
 
 use bbs::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -121,8 +121,16 @@ pub async fn verify_bounded_bls_signature_request(request: JsValue) -> Result<Js
         proof_of_hidden_messages: request.proofOfHiddenMessages,
     };
     match ctx.verify(&messages, &pk, &nonce) {
-        Err(e) => Err(JsValue::from(&format!("{:#?}", e))),
-        Ok(b) => Ok(JsValue::from_bool(b)),
+        Err(e) => Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
+            verified: false,
+            error: Some(format!("{:?}", e)),
+        })
+        .unwrap()),
+        Ok(b) => Ok(serde_wasm_bindgen::to_value(&BbsVerifyResponse {
+            verified: b,
+            error: None,
+        })
+        .unwrap()),
     }
 }
 
