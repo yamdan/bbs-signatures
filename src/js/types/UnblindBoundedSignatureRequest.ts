@@ -24,4 +24,3 @@ export interface UnblindBoundedSignatureRequest {
    */
   readonly blindingFactor: Uint8Array;
 }
-  
