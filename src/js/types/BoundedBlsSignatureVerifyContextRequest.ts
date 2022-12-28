@@ -32,12 +32,11 @@ export interface BoundedBlsSignatureVerifyContextRequest {
    */
   readonly messageCount: number;
   /**
-    * BLS12-381 public key of the signer of the signature
-    */
+   * BLS12-381 public key of the signer of the signature
+   */
   readonly publicKey: Uint8Array;
   /**
    * A nonce for the resulting proof
    */
   readonly nonce: Uint8Array;
 }
-  

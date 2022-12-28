@@ -42,7 +42,7 @@ pub async fn bounded_bls_signature_request_tests() {
 
     let request = BoundedBlsSignatureRequestContextRequest {
         issuerPublicKey: dpk_bytes0,
-        proverSecretKey: b"WALLET_MASTER_SECRET".to_vec(),
+        proverSecretKey: string_to_typed_bytes("WALLET_MASTER_SECRET"),
         messageCount: 10,
         nonce: b"dummy nonce".to_vec(),
     };
@@ -91,7 +91,7 @@ pub async fn bounded_bls_sign_tests() {
 
     let request = BoundedBlsSignatureRequestContextRequest {
         issuerPublicKey: dpk_bytes0.clone(),
-        proverSecretKey: b"WALLET_MASTER_SECRET".to_vec(),
+        proverSecretKey: string_to_typed_bytes("WALLET_MASTER_SECRET"),
         messageCount: 3,
         nonce: b"dummy nonce".to_vec(),
     };

@@ -78,10 +78,10 @@ pub async fn bounded_bls_signature_request(request: JsValue) -> Result<JsValue, 
     };
     // create only one blind messages map (key=msg_pvsk_total-1 value=prover_secret_key)
     let mut messages = BTreeMap::new();
-    messages.insert(
-        msg_pvsk_total - 1,
-        SignatureMessage::hash(&request.proverSecretKey),
-    );
+    match gen_signature_message(&request.proverSecretKey) {
+        Err(_) => return Err(JsValue::from_str("Failed to generate signature message")),
+        Ok(m) => messages.insert(msg_pvsk_total - 1, m),
+    };
     let nonce = ProofNonce::hash(&request.nonce);
     match Prover::new_blind_signature_context(&pk, &messages, &nonce) {
         Err(e) => Err(JsValue::from(&format!("{:?}", e))),
@@ -98,6 +98,7 @@ pub async fn bounded_bls_signature_request(request: JsValue) -> Result<JsValue, 
 }
 
 // inspired by bbs_verify_blind_signature_proof
+#[wasm_bindgen(js_name = verifyBoundedBlsSignatureRequest)]
 pub async fn verify_bounded_bls_signature_request(request: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
     let request: BoundedBlsSignatureVerifyContextRequest = request.try_into()?;
@@ -133,7 +134,7 @@ pub async fn bounded_bls_sign(request: JsValue) -> Result<JsValue, JsValue> {
     let dpk_bytes = request.keyPair.publicKey.unwrap();
 
     let dpk = DeterministicPublicKey::from(array_ref![dpk_bytes, 0, G2_COMPRESSED_SIZE]);
-    let pk_res = dpk.to_public_key(request.messages.len());
+    let pk_res = dpk.to_public_key(request.messages.len() + 1);
     let pk;
     match pk_res {
         Err(_) => return Err(JsValue::from_str("Failed to convert key")),

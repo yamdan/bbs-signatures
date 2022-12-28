@@ -32,4 +32,3 @@ export interface BoundedBlsSignatureRequestContextRequest {
    */
   readonly nonce: Uint8Array;
 }
-  
