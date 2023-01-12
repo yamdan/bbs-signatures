@@ -22,7 +22,7 @@ use wasm_bindgen::prelude::*;
 
 wasm_impl!(
     BoundedBlsSignatureRequestContextRequest,
-    issuerPublicKey: Vec<u8>,
+    issuerPublicKey: DeterministicPublicKey,
     proverSecretKey: Vec<u8>,
     messageCount: usize,
     nonce: Vec<u8>
