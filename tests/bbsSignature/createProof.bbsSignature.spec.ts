@@ -11,7 +11,12 @@
  * limitations under the License.
  */
 
-import { BbsCreateProofRequest, createProof, blsCreateProof, blsCreateProofMulti, BbsCreateProofMultiRequest } from "../../lib";
+import {
+  BbsCreateProofRequest,
+  createProof,
+  blsCreateProofMulti,
+  BbsCreateProofMultiRequest,
+} from "../../lib";
 import { randomBytes } from "@stablelib/random";
 import { base64Decode, stringToBytes, stringToTypedBytes } from "../utilities";
 
@@ -229,18 +234,16 @@ describe("bbsSignature", () => {
 
   describe("blsCreateProofMulti", () => {
     it("should create proof revealing single message from single message signature", async () => {
-      const messages = [
-        [stringToTypedBytes("uzAoQFqLgReidw==")]
-      ];
+      const messages = [[stringToTypedBytes("uzAoQFqLgReidw==")]];
       const blsPublicKey = [
         base64Decode(
           "gPz23LHQrxwlZJpeAuPKou582/+mIJ0+TYmoOBWRGqcGvx2o9aRID/umqLs+tfc9Cf0Hl7w2zzpOPAuhV22nnIRBIS2JNgKPtkoZ3HWC/rF10GzWTbHWIQkqKDvepxX9"
-        )
+        ),
       ];
       const signature = [
         base64Decode(
           "rqd9lDf2BfHlZ5VMn6Ixf2LuiW6UsChG29S/Qsf6suSDxUil3cZp6ktFhHDd2TedJmSZEgbMbmoURRP0yJmkF+5Rb6RW7j+exRwVndypfDNB/rZ0lrbolzuxr6bvm7HAznsGewibBG0pA8zdMyiI5g=="
-        )
+        ),
       ];
 
       const request: BbsCreateProofMultiRequest = {
@@ -265,17 +268,17 @@ describe("bbsSignature", () => {
           stringToTypedBytes("C+n1rPz1/tVzPg=="),
           stringToTypedBytes("h3x8cbySqC4rLA=="),
           stringToTypedBytes("MGf74ofGdRwNbw=="),
-        ]
+        ],
       ];
       const blsPublicKey = [
         base64Decode(
           "uYrCIgmn8ljb0IGqZTZq2P0YEQWRzl7xcoMmLtGkxa/8JTtPuT81RMIkGulVLj8yBUoB/iMu+7co0HdW0DWzHPQgy257MESx298xFG6uB6KBfWK083g0WCLB+QB4Q7rM"
-        )
+        ),
       ];
       const signature = [
         base64Decode(
           "qxSZGJTrx19EZoZPMWzfc/7J/qcfO7HWKOOAXU7r070LAlqZrOMOp12alo+JRlMsIGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
-        )
+        ),
       ];
 
       const request: BbsCreateProofMultiRequest = {
@@ -300,17 +303,17 @@ describe("bbsSignature", () => {
           stringToTypedBytes("uiSKIfNoO2rMrA=="),
           stringToTypedBytes("lMoHHrFx0LxwAw=="),
           stringToTypedBytes("wdwqLVm9chMMnA=="),
-        ]
+        ],
       ];
       const blsPublicKey = [
         base64Decode(
           "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
-        )
+        ),
       ];
       const signature = [
         base64Decode(
           "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
-        )
+        ),
       ];
 
       const request: BbsCreateProofMultiRequest = {
@@ -335,17 +338,17 @@ describe("bbsSignature", () => {
           stringToTypedBytes("uiSKIfNoO2rMrA=="),
           stringToTypedBytes("lMoHHrFx0LxwAw=="),
           stringToTypedBytes("wdwqLVm9chMMnA=="),
-        ]
+        ],
       ];
       const blsPublicKey = [
         base64Decode(
           "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
-        )
+        ),
       ];
       const signature = [
         base64Decode(
           "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
-        )
+        ),
       ];
 
       const request: BbsCreateProofMultiRequest = {
@@ -371,17 +374,17 @@ describe("bbsSignature", () => {
           stringToTypedBytes("lMoHHrFx0LxwAw=="),
           stringToTypedBytes("wdwqLVm9chMMnA=="),
           stringToTypedBytes("badmessagex01a=="),
-        ]
+        ],
       ];
       const blsPublicKey = [
         base64Decode(
           "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
-        )
+        ),
       ];
       const signature = [
         base64Decode(
           "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
-        )
+        ),
       ];
 
       const request: BbsCreateProofMultiRequest = {
@@ -405,17 +408,17 @@ describe("bbsSignature", () => {
           stringToTypedBytes("badmessagex01a=="),
           stringToTypedBytes("lMoHHrFx0LxwAw=="),
           stringToTypedBytes("wdwqLVm9chMMnA=="),
-        ]
+        ],
       ];
       const blsPublicKey = [
         base64Decode(
           "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
-        )
+        ),
       ];
       const signature = [
         base64Decode(
           "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
-        )
+        ),
       ];
 
       const request: BbsCreateProofMultiRequest = {
@@ -438,17 +441,17 @@ describe("bbsSignature", () => {
         [
           stringToTypedBytes("lMoHHrFx0LxwAw=="),
           stringToTypedBytes("wdwqLVm9chMMnA=="),
-        ]
+        ],
       ];
       const blsPublicKey = [
         base64Decode(
           "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
-        )
+        ),
       ];
       const signature = [
         base64Decode(
           "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
-        )
+        ),
       ];
 
       const request: BbsCreateProofMultiRequest = {
@@ -472,17 +475,17 @@ describe("bbsSignature", () => {
           stringToTypedBytes("wdwqLVm9chMMnA=="),
           stringToTypedBytes("lMoHHrFx0LxwAw=="),
           stringToTypedBytes("uiSKIfNoO2rMrA=="),
-        ]
+        ],
       ];
       const blsPublicKey = [
         base64Decode(
           "oXMlxldNwkqmbbWc1GBBT0GTd1cOQW0ofcGQegg9y7ZTXS1wbkXbHe2lCDXJHV6ZFJ67AwCgPxbZNGf2a4N9uMocUhnAIoHORYLSHqBG3O7vLXDYRp1kZomlNp6ZLVux"
-        )
+        ),
       ];
       const signature = [
         base64Decode(
           "qXlIUhC8mhEUaOMRlHExjsbtFug85SG0vExgfFZo2UmUcrLCsVDbIx9u3S4HL2a7IGRyCKFCqTh0OmRptTSlGpndfzkcPSD6zHgbdf9UD80utVUUq+Y94x2DXq0A5D5iS0ZHBmNbqQiYD0OAdIgIZQ=="
-        )
+        ),
       ];
 
       const request: BbsCreateProofMultiRequest = {
