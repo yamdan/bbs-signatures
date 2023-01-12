@@ -65,12 +65,10 @@ wasm_impl!(
 pub async fn bounded_bls_signature_request(request: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
     let request: BoundedBlsSignatureRequestContextRequest = request.try_into()?;
-    let dpk_bytes = request.issuerPublicKey;
-    let dpk = DeterministicPublicKey::from(array_ref![dpk_bytes, 0, G2_COMPRESSED_SIZE]);
 
-    // // create (MessageCount + 1) pubkeys for messages and one proverSecretKey
+    // create (MessageCount + 1) pubkeys for messages and one proverSecretKey
     let msg_pvsk_total = request.messageCount + 1;
-    let pk_res = dpk.to_public_key(msg_pvsk_total);
+    let pk_res = request.issuerPublicKey.to_public_key(msg_pvsk_total);
     let pk;
     match pk_res {
         Err(_) => return Err(JsValue::from_str("Failed to convert key")),
