@@ -16,7 +16,7 @@
  */
 export interface BoundedBlsSignatureRequestContextRequest {
   /**
-   * The resulting commitment of the blinded messages to sign
+   * BLS12-381 public key of the signer of the signature
    */
   readonly issuerPublicKey: Uint8Array;
   /**
