@@ -97,7 +97,7 @@ describe("blindBbsSignature", () => {
       const uResponse = await unblindBlindBlsSignature(uRequest);
       expect(uResponse).toBeDefined();
 
-      // verify bound signature
+      // verify blind signature
       const verifyRequest: BlsBbsVerifyRequest = {
         publicKey: blsKeyPair.publicKey,
         messages: [
@@ -133,7 +133,7 @@ describe("blindBbsSignature", () => {
       const uResponse = await unblindBlindBlsSignature(uRequest);
       expect(uResponse).toBeDefined();
 
-      // verify bound signature
+      // verify blind signature
       const verifyRequest: BlsBbsVerifyRequest = {
         publicKey: blsKeyPair.publicKey,
         messages: [
