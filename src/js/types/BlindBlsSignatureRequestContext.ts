@@ -12,9 +12,9 @@
  */
 
 /**
- * A request verify a commitment
+ * A context to create a blind BBS signature request
  */
-export interface BoundedBlsSignatureVerifyContextRequest {
+export interface BlindBlsSignatureRequestContext {
   /**
    * The resulting commitment of the blinded messages to sign
    */
@@ -28,15 +28,7 @@ export interface BoundedBlsSignatureVerifyContextRequest {
    */
   readonly challengeHash: Uint8Array;
   /**
-   * The total number of messages
+   * The signature blinding factor
    */
-  readonly messageCount: number;
-  /**
-   * BLS12-381 public key of the signer of the signature
-   */
-  readonly publicKey: Uint8Array;
-  /**
-   * A nonce for the resulting proof
-   */
-  readonly nonce: Uint8Array;
+  readonly blindingFactor: Uint8Array;
 }

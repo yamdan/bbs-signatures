@@ -11,24 +11,22 @@
  * limitations under the License.
  */
 
+import { BlsKeyPair } from "./BlsKeyPair";
+
 /**
- * A context to create a blind BBS signature request
+ * A request to create a BBS signature for a set of messages from a BLS12-381 key pair
  */
-export interface BoundedBlsSignatureRequestContext {
+export interface BlindBlsSignContextRequest {
   /**
-   * The resulting commitment of the blinded messages to sign
+   * BLS12-381 key pair
+   */
+  readonly keyPair: BlsKeyPair;
+  /**
+   * Messages to sign
+   */
+  readonly messages: readonly Uint8Array[];
+  /**
+   * The resulting commitment of the blinded prover secret key to sign
    */
   readonly commitment: Uint8Array;
-  /**
-   * The proof of hidden messages to be verified by the signer
-   */
-  readonly proofOfHiddenMessages: Uint8Array;
-  /**
-   * Fiat-Shamir challenge
-   */
-  readonly challengeHash: Uint8Array;
-  /**
-   * The signature blinding factor
-   */
-  readonly blindingFactor: Uint8Array;
 }

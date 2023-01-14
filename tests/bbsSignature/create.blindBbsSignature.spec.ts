@@ -14,20 +14,20 @@
 import {
   generateBls12381G2KeyPair,
   BlsKeyPair,
-  BoundedBlsSignatureRequestContextRequest,
-  boundedBlsSignatureRequest,
-  BoundedBlsSignatureVerifyContextRequest,
-  verifyBoundedBlsSignatureRequest,
-  BoundedBlsSignContextRequest,
-  boundedBlsSign,
-  unblindBoundedBlsSignature,
-  UnblindBoundedSignatureRequest,
+  BlindBlsSignatureRequestContextRequest,
+  blindBlsSignatureRequest,
+  BlindBlsSignatureVerifyContextRequest,
+  verifyBlindBlsSignatureRequest,
+  BlindBlsSignContextRequest,
+  blindBlsSign,
+  unblindBlindBlsSignature,
+  UnblindBlindSignatureRequest,
   BlsBbsVerifyRequest,
   blsVerify,
 } from "../../lib";
 import { stringToBytes, stringToTypedBytes } from "../utilities";
 
-describe("boundedBbsSignature", () => {
+describe("blindBbsSignature", () => {
   describe("signature request", () => {
     let blsKeyPair: BlsKeyPair;
 
@@ -36,15 +36,15 @@ describe("boundedBbsSignature", () => {
     });
 
     it("should create and verify a signature request", async () => {
-      const request: BoundedBlsSignatureRequestContextRequest = {
+      const request: BlindBlsSignatureRequestContextRequest = {
         signerPublicKey: blsKeyPair.publicKey,
         proverSecretKey: stringToTypedBytes("PROVER_SECRET"),
         messageCount: 10,
         nonce: stringToBytes("0123456789"),
       };
-      const response = await boundedBlsSignatureRequest(request);
+      const response = await blindBlsSignatureRequest(request);
       expect(request).toBeDefined();
-      const vRequest: BoundedBlsSignatureVerifyContextRequest = {
+      const vRequest: BlindBlsSignatureVerifyContextRequest = {
         commitment: response.commitment,
         proofOfHiddenMessages: response.proofOfHiddenMessages,
         challengeHash: response.challengeHash,
@@ -52,7 +52,7 @@ describe("boundedBbsSignature", () => {
         publicKey: blsKeyPair.publicKey,
         nonce: stringToBytes("0123456789"),
       };
-      const vResponse = await verifyBoundedBlsSignatureRequest(vRequest);
+      const vResponse = await verifyBlindBlsSignatureRequest(vRequest);
       expect(vResponse.verified).toBeTruthy();
     });
   });
@@ -64,20 +64,20 @@ describe("boundedBbsSignature", () => {
 
     beforeAll(async () => {
       blsKeyPair = await generateBls12381G2KeyPair();
-      const request: BoundedBlsSignatureRequestContextRequest = {
+      const request: BlindBlsSignatureRequestContextRequest = {
         signerPublicKey: blsKeyPair.publicKey,
         proverSecretKey: stringToTypedBytes("PROVER_SECRET"),
         messageCount: 3,
         nonce: stringToBytes("0123456789"),
       };
-      const response = await boundedBlsSignatureRequest(request);
+      const response = await blindBlsSignatureRequest(request);
       commitment = response.commitment;
       blindingFactor = response.blindingFactor;
     });
 
-    it("should sign and verify a bounded signature", async () => {
+    it("should sign and verify a blind signature", async () => {
       // blind sign
-      const sRequest: BoundedBlsSignContextRequest = {
+      const sRequest: BlindBlsSignContextRequest = {
         keyPair: blsKeyPair,
         messages: [
           stringToTypedBytes("ExampleMessage"),
@@ -86,15 +86,15 @@ describe("boundedBbsSignature", () => {
         ],
         commitment: commitment,
       };
-      const sResponse = await boundedBlsSign(sRequest);
+      const sResponse = await blindBlsSign(sRequest);
       expect(sResponse).toBeDefined();
 
       // unblind
-      const uRequest: UnblindBoundedSignatureRequest = {
+      const uRequest: UnblindBlindSignatureRequest = {
         signature: sResponse,
         blindingFactor: blindingFactor,
       };
-      const uResponse = await unblindBoundedBlsSignature(uRequest);
+      const uResponse = await unblindBlindBlsSignature(uRequest);
       expect(uResponse).toBeDefined();
 
       // verify bound signature
@@ -113,7 +113,7 @@ describe("boundedBbsSignature", () => {
 
     it("should not verify a invalid message", async () => {
       // blind sign
-      const sRequest: BoundedBlsSignContextRequest = {
+      const sRequest: BlindBlsSignContextRequest = {
         keyPair: blsKeyPair,
         messages: [
           stringToTypedBytes("ExampleMessage"),
@@ -122,15 +122,15 @@ describe("boundedBbsSignature", () => {
         ],
         commitment: commitment,
       };
-      const sResponse = await boundedBlsSign(sRequest);
+      const sResponse = await blindBlsSign(sRequest);
       expect(sResponse).toBeDefined();
 
       // unblind
-      const uRequest: UnblindBoundedSignatureRequest = {
+      const uRequest: UnblindBlindSignatureRequest = {
         signature: sResponse,
         blindingFactor: blindingFactor,
       };
-      const uResponse = await unblindBoundedBlsSignature(uRequest);
+      const uResponse = await unblindBlindBlsSignature(uRequest);
       expect(uResponse).toBeDefined();
 
       // verify bound signature

@@ -24,11 +24,11 @@ import {
   BbsVerifyProofRequest,
   BbsCreateProofMultiRequest,
   BbsVerifyProofMultiRequest,
-  BoundedBlsSignContextRequest,
-  BoundedBlsSignatureRequestContext,
-  BoundedBlsSignatureRequestContextRequest,
-  BoundedBlsSignatureVerifyContextRequest,
-  UnblindBoundedSignatureRequest,
+  BlindBlsSignContextRequest,
+  BlindBlsSignatureRequestContext,
+  BlindBlsSignatureRequestContextRequest,
+  BlindBlsSignatureVerifyContextRequest,
+  UnblindBlindSignatureRequest,
 } from "./types";
 
 export * from "./types";
@@ -87,18 +87,18 @@ export function blsVerifyProofMulti(
   request: BbsVerifyProofMultiRequest
 ): Promise<BbsVerifyResult>;
 
-export function boundedBlsSignatureRequest(
-  request: BoundedBlsSignatureRequestContextRequest
-): Promise<BoundedBlsSignatureRequestContext>;
+export function blindBlsSignatureRequest(
+  request: BlindBlsSignatureRequestContextRequest
+): Promise<BlindBlsSignatureRequestContext>;
 
-export function verifyBoundedBlsSignatureRequest(
-  request: BoundedBlsSignatureVerifyContextRequest
+export function verifyBlindBlsSignatureRequest(
+  request: BlindBlsSignatureVerifyContextRequest
 ): Promise<BbsVerifyResult>;
 
-export function boundedBlsSign(
-  request: BoundedBlsSignContextRequest
+export function blindBlsSign(
+  request: BlindBlsSignContextRequest
 ): Promise<Uint8Array>;
 
-export function unblindBoundedBlsSignature(
-  request: UnblindBoundedSignatureRequest
+export function unblindBlindBlsSignature(
+  request: UnblindBlindSignatureRequest
 ): Promise<Uint8Array>;

@@ -48,7 +48,7 @@ const BULLETPROOFS_TRANSCRIPT_LABEL: &[u8] = b"BbsSignaturesWithBulletproofs";
 #[macro_use]
 mod macros;
 pub mod bbs_plus;
-pub mod bounded_bls12381;
+pub mod blind_bls12381;
 pub mod bls12381;
 mod utils;
 
@@ -159,7 +159,7 @@ impl PoKOfSignatureProofMultiWrapper {
 
 pub mod prelude {
     pub use crate::bbs_plus::*;
-    pub use crate::bounded_bls12381::*;
+    pub use crate::blind_bls12381::*;
     pub use crate::bls12381::*;
 }
 
@@ -213,11 +213,20 @@ impl fmt::Display for GenSignatureMessageError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::EmptyMessage => write!(f, "SignatureMessage generation error: empty message"),
-            Self::InvalidBitLength => write!(f, "SignatureMessage generation error: invalid bit length"),
-            Self::InvalidMessageType => write!(f, "SignatureMessage generation error: invalid message type"),
-            Self::PrimeFieldDecodingError => write!(f, "SignatureMessage generation error: prime field decoding error"),
-            Self::TryFromSliceError => write!(f, "SignatureMessage generation error: try from slice error"),
-        }        
+            Self::InvalidBitLength => {
+                write!(f, "SignatureMessage generation error: invalid bit length")
+            }
+            Self::InvalidMessageType => {
+                write!(f, "SignatureMessage generation error: invalid message type")
+            }
+            Self::PrimeFieldDecodingError => write!(
+                f,
+                "SignatureMessage generation error: prime field decoding error"
+            ),
+            Self::TryFromSliceError => {
+                write!(f, "SignatureMessage generation error: try from slice error")
+            }
+        }
     }
 }
 
