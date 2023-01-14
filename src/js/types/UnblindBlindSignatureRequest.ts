@@ -12,23 +12,15 @@
  */
 
 /**
- * A context to create a blind BBS signature request
+ * A request unblind bounded signature
  */
-export interface BoundedBlsSignatureRequestContextRequest {
+export interface UnblindBlindSignatureRequest {
   /**
-   * BLS12-381 public key of the signer of the signature
+   * Raw signature value
    */
-  readonly signerPublicKey: Uint8Array;
+  readonly signature: Uint8Array;
   /**
-   * The prover secret key
+   * The signature blinding factor
    */
-  readonly proverSecretKey: Uint8Array;
-  /**
-   * The total number of messages
-   */
-  readonly messageCount: number;
-  /**
-   * A nonce for the resulting proof
-   */
-  readonly nonce: Uint8Array;
+  readonly blindingFactor: Uint8Array;
 }

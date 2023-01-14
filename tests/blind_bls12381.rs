@@ -34,7 +34,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 #[allow(non_snake_case)]
 #[wasm_bindgen_test]
-pub async fn bounded_bls_signature_request_tests() {
+pub async fn blind_bls_signature_request_tests() {
     let key_pair_js0 = bls_generate_g2_key(None).await.unwrap();
     let dpk_bytes0 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone())
         .unwrap()
@@ -42,18 +42,18 @@ pub async fn bounded_bls_signature_request_tests() {
         .unwrap();
     let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
 
-    let request = BoundedBlsSignatureRequestContextRequest {
+    let request = BlindBlsSignatureRequestContextRequest {
         signerPublicKey: dpk0,
         proverSecretKey: string_to_typed_bytes("PROVER_SECRET"),
         messageCount: 10,
         nonce: b"dummy nonce".to_vec(),
     };
     let js_value = serde_wasm_bindgen::to_value(&request).unwrap();
-    let result = bounded_bls_signature_request(js_value).await;
+    let result = blind_bls_signature_request(js_value).await;
     assert!(result.is_ok());
-    let result: BoundedBlsSignatureRequestContextResponse = result.unwrap().try_into().unwrap();
+    let result: BlindBlsSignatureRequestContextResponse = result.unwrap().try_into().unwrap();
 
-    let request = BoundedBlsSignatureVerifyContextRequest {
+    let request = BlindBlsSignatureVerifyContextRequest {
         commitment: result.commitment.clone(),
         proofOfHiddenMessages: result.proofOfHiddenMessages.clone(),
         challengeHash: result.challengeHash.clone(),
@@ -62,12 +62,12 @@ pub async fn bounded_bls_signature_request_tests() {
         nonce: b"dummy nonce".to_vec(),
     };
     let js_value = serde_wasm_bindgen::to_value(&request).unwrap();
-    let res = verify_bounded_bls_signature_request(js_value).await;
+    let res = verify_blind_bls_signature_request(js_value).await;
     assert!(res.is_ok());
     let res: BbsVerifyResponse = serde_wasm_bindgen::from_value(res.unwrap()).unwrap();
     assert!(res.verified);
 
-    let request = BoundedBlsSignatureVerifyContextRequest {
+    let request = BlindBlsSignatureVerifyContextRequest {
         commitment: result.commitment.clone(),
         proofOfHiddenMessages: result.proofOfHiddenMessages.clone(),
         challengeHash: result.challengeHash.clone(),
@@ -76,7 +76,7 @@ pub async fn bounded_bls_signature_request_tests() {
         nonce: b"bad nonce".to_vec(),
     };
     let js_value = serde_wasm_bindgen::to_value(&request).unwrap();
-    let res = verify_bounded_bls_signature_request(js_value).await;
+    let res = verify_blind_bls_signature_request(js_value).await;
     assert!(res.is_ok());
     let res: BbsVerifyResponse = serde_wasm_bindgen::from_value(res.unwrap()).unwrap();
     assert!(!res.verified);
@@ -84,23 +84,23 @@ pub async fn bounded_bls_signature_request_tests() {
 
 #[allow(non_snake_case)]
 #[wasm_bindgen_test]
-pub async fn bounded_bls_sign_tests() {
+pub async fn blind_bls_sign_tests() {
     let key_pair_js0 = bls_generate_g2_key(Some(vec![0u8; 16])).await.unwrap();
     let dpk_bytes0 = serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone())
         .unwrap()
         .publicKey
         .unwrap();
     let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
-    let request = BoundedBlsSignatureRequestContextRequest {
+    let request = BlindBlsSignatureRequestContextRequest {
         signerPublicKey: dpk0,
         proverSecretKey: string_to_typed_bytes("PROVER_SECRET"),
         messageCount: 3,
         nonce: b"dummy nonce".to_vec(),
     };
     let js_value = serde_wasm_bindgen::to_value(&request).unwrap();
-    let result = bounded_bls_signature_request(js_value).await;
+    let result = blind_bls_signature_request(js_value).await;
     assert!(result.is_ok());
-    let result: BoundedBlsSignatureRequestContextResponse = result.unwrap().try_into().unwrap();
+    let result: BlindBlsSignatureRequestContextResponse = result.unwrap().try_into().unwrap();
     let blindingFactor = result.blindingFactor;
 
     // blind sign
@@ -109,23 +109,23 @@ pub async fn bounded_bls_sign_tests() {
         string_to_typed_bytes("Message2"),
         string_to_typed_bytes("Message3"),
     ];
-    let request = BoundedBlsSignContextRequest {
+    let request = BlindBlsSignContextRequest {
         keyPair: serde_wasm_bindgen::from_value::<BlsKeyPair>(key_pair_js0.clone()).unwrap(),
         messages: messages.clone(),
         commitment: result.commitment.clone(),
     };
     let js_value = serde_wasm_bindgen::to_value(&request).unwrap();
-    let result = bounded_bls_sign(js_value).await;
+    let result = blind_bls_sign(js_value).await;
     assert!(result.is_ok());
     let result: BlindSignature = result.unwrap().try_into().unwrap();
 
     // unblind
-    let request = UnblindBoundedSignatureRequest {
+    let request = UnblindBlindSignatureRequest {
         signature: result,
         blindingFactor,
     };
     let js_value = serde_wasm_bindgen::to_value(&request).unwrap();
-    let result = unblind_bounded_bls_signature(js_value).await;
+    let result = unblind_blind_bls_signature(js_value).await;
     assert!(result.is_ok());
 
     let signature: Signature = serde_wasm_bindgen::from_value(result.unwrap()).unwrap();

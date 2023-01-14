@@ -21,7 +21,7 @@ use std::{
 use wasm_bindgen::prelude::*;
 
 wasm_impl!(
-    BoundedBlsSignatureRequestContextRequest,
+    BlindBlsSignatureRequestContextRequest,
     signerPublicKey: DeterministicPublicKey,
     proverSecretKey: Vec<u8>,
     messageCount: usize,
@@ -29,7 +29,7 @@ wasm_impl!(
 );
 
 wasm_impl!(
-    BoundedBlsSignatureRequestContextResponse,
+    BlindBlsSignatureRequestContextResponse,
     commitment: Commitment,
     proofOfHiddenMessages: ProofG1,
     challengeHash: ProofChallenge,
@@ -37,7 +37,7 @@ wasm_impl!(
 );
 
 wasm_impl!(
-    BoundedBlsSignatureVerifyContextRequest,
+    BlindBlsSignatureVerifyContextRequest,
     commitment: Commitment,
     proofOfHiddenMessages: ProofG1,
     challengeHash: ProofChallenge,
@@ -47,24 +47,24 @@ wasm_impl!(
 );
 
 wasm_impl!(
-    BoundedBlsSignContextRequest,
+    BlindBlsSignContextRequest,
     keyPair: BlsKeyPair,
     messages: Vec<Vec<u8>>,
     commitment: Commitment
 );
 
 wasm_impl!(
-    UnblindBoundedSignatureRequest,
+    UnblindBlindSignatureRequest,
     signature: BlindSignature,
     blindingFactor: SignatureBlinding
 );
 
 // inspired by bbs_blind_signature_commitment
 // this fn is stricted to be able to create only one blinded message (prover secret key)
-#[wasm_bindgen(js_name = boundedBlsSignatureRequest)]
-pub async fn bounded_bls_signature_request(request: JsValue) -> Result<JsValue, JsValue> {
+#[wasm_bindgen(js_name = blindBlsSignatureRequest)]
+pub async fn blind_bls_signature_request(request: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
-    let request: BoundedBlsSignatureRequestContextRequest = request.try_into()?;
+    let request: BlindBlsSignatureRequestContextRequest = request.try_into()?;
 
     // create (MessageCount + 1) pubkeys for messages and one proverSecretKey
     let msg_pvsk_total = request.messageCount + 1;
@@ -84,7 +84,7 @@ pub async fn bounded_bls_signature_request(request: JsValue) -> Result<JsValue, 
     match Prover::new_blind_signature_context(&pk, &messages, &nonce) {
         Err(e) => Err(JsValue::from(&format!("{:?}", e))),
         Ok((cx, bf)) => {
-            let response = BoundedBlsSignatureRequestContextResponse {
+            let response = BlindBlsSignatureRequestContextResponse {
                 commitment: cx.commitment,
                 proofOfHiddenMessages: cx.proof_of_hidden_messages,
                 challengeHash: cx.challenge_hash,
@@ -96,10 +96,10 @@ pub async fn bounded_bls_signature_request(request: JsValue) -> Result<JsValue, 
 }
 
 // inspired by bbs_verify_blind_signature_proof
-#[wasm_bindgen(js_name = verifyBoundedBlsSignatureRequest)]
-pub async fn verify_bounded_bls_signature_request(request: JsValue) -> Result<JsValue, JsValue> {
+#[wasm_bindgen(js_name = verifyBlindBlsSignatureRequest)]
+pub async fn verify_blind_bls_signature_request(request: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
-    let request: BoundedBlsSignatureVerifyContextRequest = request.try_into()?;
+    let request: BlindBlsSignatureVerifyContextRequest = request.try_into()?;
     let msg_pvsk_total = request.messageCount + 1;
     let pk = request.publicKey.to_public_key(msg_pvsk_total)?;
     // let pk = request.pk;
@@ -133,10 +133,10 @@ pub async fn verify_bounded_bls_signature_request(request: JsValue) -> Result<Js
 }
 
 // inspired by bbs_blind_sign
-#[wasm_bindgen(js_name = boundedBlsSign)]
-pub async fn bounded_bls_sign(request: JsValue) -> Result<JsValue, JsValue> {
+#[wasm_bindgen(js_name = blindBlsSign)]
+pub async fn blind_bls_sign(request: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
-    let request: BoundedBlsSignContextRequest = request.try_into()?;
+    let request: BlindBlsSignContextRequest = request.try_into()?;
     let dpk_bytes = request.keyPair.publicKey.unwrap();
 
     let dpk = DeterministicPublicKey::from(array_ref![dpk_bytes, 0, G2_COMPRESSED_SIZE]);
@@ -170,10 +170,10 @@ pub async fn bounded_bls_sign(request: JsValue) -> Result<JsValue, JsValue> {
 }
 
 // inspired by bbs_get_unblinded_signature
-#[wasm_bindgen(js_name = unblindBoundedBlsSignature)]
-pub async fn unblind_bounded_bls_signature(request: JsValue) -> Result<JsValue, JsValue> {
+#[wasm_bindgen(js_name = unblindBlindBlsSignature)]
+pub async fn unblind_blind_bls_signature(request: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
-    let request: UnblindBoundedSignatureRequest = request.try_into()?;
+    let request: UnblindBlindSignatureRequest = request.try_into()?;
     Ok(
         serde_wasm_bindgen::to_value(&request.signature.to_unblinded(&request.blindingFactor))
             .unwrap(),
