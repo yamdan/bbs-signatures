@@ -40,7 +40,7 @@ pub async fn bounded_bls_signature_request_tests() {
     let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
 
     let request = BoundedBlsSignatureRequestContextRequest {
-        issuerPublicKey: dpk0,
+        signerPublicKey: dpk0,
         proverSecretKey: string_to_typed_bytes("WALLET_MASTER_SECRET"),
         messageCount: 10,
         nonce: b"dummy nonce".to_vec(),
@@ -89,7 +89,7 @@ pub async fn bounded_bls_sign_tests() {
         .unwrap();
     let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
     let request = BoundedBlsSignatureRequestContextRequest {
-        issuerPublicKey: dpk0,
+        signerPublicKey: dpk0,
         proverSecretKey: string_to_typed_bytes("WALLET_MASTER_SECRET"),
         messageCount: 3,
         nonce: b"dummy nonce".to_vec(),

@@ -22,7 +22,7 @@ use wasm_bindgen::prelude::*;
 
 wasm_impl!(
     BoundedBlsSignatureRequestContextRequest,
-    issuerPublicKey: DeterministicPublicKey,
+    signerPublicKey: DeterministicPublicKey,
     proverSecretKey: Vec<u8>,
     messageCount: usize,
     nonce: Vec<u8>
@@ -68,7 +68,7 @@ pub async fn bounded_bls_signature_request(request: JsValue) -> Result<JsValue, 
 
     // create (MessageCount + 1) pubkeys for messages and one proverSecretKey
     let msg_pvsk_total = request.messageCount + 1;
-    let pk_res = request.issuerPublicKey.to_public_key(msg_pvsk_total);
+    let pk_res = request.signerPublicKey.to_public_key(msg_pvsk_total);
     let pk;
     match pk_res {
         Err(_) => return Err(JsValue::from_str("Failed to convert key")),

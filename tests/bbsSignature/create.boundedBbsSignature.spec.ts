@@ -37,7 +37,7 @@ describe("boundedBbsSignature", () => {
 
     it("should create and verify a signature request", async () => {
       const request: BoundedBlsSignatureRequestContextRequest = {
-        issuerPublicKey: blsKeyPair.publicKey,
+        signerPublicKey: blsKeyPair.publicKey,
         proverSecretKey: stringToTypedBytes("PROVER_SECRET"),
         messageCount: 10,
         nonce: stringToBytes("0123456789"),
@@ -65,7 +65,7 @@ describe("boundedBbsSignature", () => {
     beforeAll(async () => {
       blsKeyPair = await generateBls12381G2KeyPair();
       const request: BoundedBlsSignatureRequestContextRequest = {
-        issuerPublicKey: blsKeyPair.publicKey,
+        signerPublicKey: blsKeyPair.publicKey,
         proverSecretKey: stringToTypedBytes("PROVER_SECRET"),
         messageCount: 3,
         nonce: stringToBytes("0123456789"),
