@@ -12,7 +12,7 @@
  */
 
 /**
- * A request unblind bounded signature
+ * A request unblind blind signature
  */
 export interface UnblindBlindSignatureRequest {
   /**
