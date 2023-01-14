@@ -16,7 +16,10 @@
 extern crate wasm_bindgen_test;
 
 use arrayref::array_ref;
-use bbs::{prelude::*, signature::BlindSignature};
+use bbs::{
+    prelude::*,
+    signature::{BlindSignature, Signature},
+};
 use std::convert::TryInto;
 use wasm::{prelude::*, BbsVerifyResponse, U8_STRING};
 use wasm_bindgen_test::*;
@@ -41,7 +44,7 @@ pub async fn bounded_bls_signature_request_tests() {
 
     let request = BoundedBlsSignatureRequestContextRequest {
         signerPublicKey: dpk0,
-        proverSecretKey: string_to_typed_bytes("WALLET_MASTER_SECRET"),
+        proverSecretKey: string_to_typed_bytes("PROVER_SECRET"),
         messageCount: 10,
         nonce: b"dummy nonce".to_vec(),
     };
@@ -90,7 +93,7 @@ pub async fn bounded_bls_sign_tests() {
     let dpk0 = DeterministicPublicKey::from(array_ref![dpk_bytes0, 0, G2_COMPRESSED_SIZE]);
     let request = BoundedBlsSignatureRequestContextRequest {
         signerPublicKey: dpk0,
-        proverSecretKey: string_to_typed_bytes("WALLET_MASTER_SECRET"),
+        proverSecretKey: string_to_typed_bytes("PROVER_SECRET"),
         messageCount: 3,
         nonce: b"dummy nonce".to_vec(),
     };
@@ -124,4 +127,23 @@ pub async fn bounded_bls_sign_tests() {
     let js_value = serde_wasm_bindgen::to_value(&request).unwrap();
     let result = unblind_bounded_bls_signature(js_value).await;
     assert!(result.is_ok());
+
+    let signature: Signature = serde_wasm_bindgen::from_value(result.unwrap()).unwrap();
+    // verify unblinded signature
+    let messages_with_secret = vec![
+        string_to_typed_bytes("Message1"),
+        string_to_typed_bytes("Message2"),
+        string_to_typed_bytes("Message3"),
+        string_to_typed_bytes("PROVER_SECRET"), // append the prover secret
+    ];
+    let verify_request = BlsBbsVerifyRequest {
+        publicKey: dpk0,
+        signature,
+        messages: messages_with_secret,
+    };
+    let verify_request_js = serde_wasm_bindgen::to_value(&verify_request).unwrap();
+    let verify_result_js = bls_verify(verify_request_js).await.unwrap();
+    let verify_result =
+        serde_wasm_bindgen::from_value::<BbsVerifyResponse>(verify_result_js).unwrap();
+    assert!(verify_result.verified);
 }
