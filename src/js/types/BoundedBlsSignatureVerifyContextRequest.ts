@@ -28,7 +28,7 @@ export interface BoundedBlsSignatureVerifyContextRequest {
    */
   readonly challengeHash: Uint8Array;
   /**
-   * The total of messages
+   * The total number of messages
    */
   readonly messageCount: number;
   /**

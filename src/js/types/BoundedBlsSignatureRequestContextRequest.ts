@@ -18,13 +18,13 @@ export interface BoundedBlsSignatureRequestContextRequest {
   /**
    * BLS12-381 public key of the signer of the signature
    */
-  readonly issuerPublicKey: Uint8Array;
+  readonly signerPublicKey: Uint8Array;
   /**
    * The prover secret key
    */
   readonly proverSecretKey: Uint8Array;
   /**
-   * The total of messages
+   * The total number of messages
    */
   readonly messageCount: number;
   /**
