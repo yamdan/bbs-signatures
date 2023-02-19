@@ -23,6 +23,5 @@ module.exports = {
   coveragePathIgnorePatterns: ["<rootDir>/__tests__", "<rootDir>/lib"],
   testTimeout: 20000,
   verbose: true,
-  name: pack.name,
   displayName: pack.name,
 };
