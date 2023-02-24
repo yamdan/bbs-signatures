@@ -1,3 +1,43 @@
+# [0.7.0](https://github.com/zkp-ld/bbs-signatures/compare/v0.6.0...v0.7.0) (2023-02-24)
+
+
+### Bug Fixes
+
+* bug fix ([b1d95a5](https://github.com/zkp-ld/bbs-signatures/commit/b1d95a5bd55cb83df7821c25b571ad53f3247f4b))
+* bug fix for verifier's challenge hash ([c82435c](https://github.com/zkp-ld/bbs-signatures/commit/c82435c08655dd6ccde7336badc3d463b3eee531))
+* catch uncaught panic ([6d74823](https://github.com/zkp-ld/bbs-signatures/commit/6d748231ab350eceae7acb7f0435a1c2dc702242))
+* correct error message ([a91400f](https://github.com/zkp-ld/bbs-signatures/commit/a91400fd6b2f1baa0f692a974cc5c592e432e59f))
+* DeterministicPubKey and BbsVerifyResponse ([41bc906](https://github.com/zkp-ld/bbs-signatures/commit/41bc906ed9b3f306e8e4f957c0e846d60527853c))
+* explicitly handle CBOR decoding error ([5c654a9](https://github.com/zkp-ld/bbs-signatures/commit/5c654a9c9c9082cbebbba24c8146a0236f7cce76))
+* format ([897b25e](https://github.com/zkp-ld/bbs-signatures/commit/897b25e57eb20229081ead9a2b9660796ce83498))
+* improve error messages ([d2f8927](https://github.com/zkp-ld/bbs-signatures/commit/d2f8927a55c0f8623d32759f4612961e97027e6c))
+* issuerPublicKey type ([e1fae64](https://github.com/zkp-ld/bbs-signatures/commit/e1fae64b4146bb755df7cb7f8da1f3ed2ba842e2))
+* linting ([3b4bd93](https://github.com/zkp-ld/bbs-signatures/commit/3b4bd93fb84365403e599b1502fb59f34c7a13dd))
+* output type of blsCreateProofMulti ([2364e10](https://github.com/zkp-ld/bbs-signatures/commit/2364e1047b5ec688708eb672fd3f60d1ee482596))
+* pass bounded signature ts test ([c68217d](https://github.com/zkp-ld/bbs-signatures/commit/c68217d8af000f55211ed3eff67633a32efc60eb))
+* rename bound to blind ([b0bcd2f](https://github.com/zkp-ld/bbs-signatures/commit/b0bcd2fa36d03a8ad3b9887bd2f0ac6be677c9d6))
+* suggested bounded signature fixes ([4ad2cb1](https://github.com/zkp-ld/bbs-signatures/commit/4ad2cb1f5172008f2cf6a96be2856ace855134e9))
+* verifying empty proof issue ([b32843b](https://github.com/zkp-ld/bbs-signatures/commit/b32843b31d19a32b862d6f0f03c8ebb4df8b8db8))
+
+
+### Features
+
+* add bound bbs signature Wasm support ([ef4a2c3](https://github.com/zkp-ld/bbs-signatures/commit/ef4a2c34c1ad84578a1003fe3efc4d1121fa9091))
+* add createProofMulti ([effcb12](https://github.com/zkp-ld/bbs-signatures/commit/effcb126c1c8426abbf077524b2c0ccd5065e407))
+* add message_count ([8fa9c57](https://github.com/zkp-ld/bbs-signatures/commit/8fa9c57bf16e844ff5cd2cbd6badbf96de6f5603))
+* add stub of blsVerifyProofMulti ([19878bf](https://github.com/zkp-ld/bbs-signatures/commit/19878bf9225571dc6517700d3a73cd0643f5f5ab))
+* add stub of createProof from multiple VCs ([522e27b](https://github.com/zkp-ld/bbs-signatures/commit/522e27b91703017f07271d49903b5813ab49ed53))
+* complete VerifyProofMulti v1 ([47859e7](https://github.com/zkp-ld/bbs-signatures/commit/47859e7d1ca484b1ac1bc7e66b7e4b48c715df26))
+* make revealed indicies externalized set instead of embedded array ([4f0405a](https://github.com/zkp-ld/bbs-signatures/commit/4f0405a346f2ebb50bfe9bc4f0ae86d1f2b3b013))
+* set as customized module only using Wasm ([73d9c34](https://github.com/zkp-ld/bbs-signatures/commit/73d9c3457b2157aa046d87baf6ff0c1a4f07b33d))
+* support range proofs (experimental) ([07e536b](https://github.com/zkp-ld/bbs-signatures/commit/07e536b12893bcc6c79405a4860f67739ab1b713))
+* update createProofMulti ([9d26068](https://github.com/zkp-ld/bbs-signatures/commit/9d26068c6dc54762c61932c346afaefe4d26a3d5))
+* update stub of blsVerifyProofMulti ([15f1b47](https://github.com/zkp-ld/bbs-signatures/commit/15f1b4726a4496d9fc60859c8626504df2e9fb16))
+* update VerifyProofMulti ([48af9d2](https://github.com/zkp-ld/bbs-signatures/commit/48af9d27c29173d8cfd5167de8a0ef8488989888))
+* update VerifyProofMulti ([ad49b6d](https://github.com/zkp-ld/bbs-signatures/commit/ad49b6dda0a61b2dbdcebeeca0e31b6dc22d2ddc))
+
+
+
 # [0.6.0](https://github.com/mattrglobal/bbs-signatures/compare/v0.5.0...v0.6.0) (2021-05-25)
 
 BREAKING CHANGES: Support for asm.js has been removed due to its poor performance and it creating bloat for all
